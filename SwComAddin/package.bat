@@ -6,16 +6,7 @@ echo   SW AI Plugin - Release Package
 echo ========================================
 echo.
 
-REM Read version from plugin_config.json
 set VERSION=0.1.0
-if exist "bin\Debug\net48\plugin_config.json" (
-    for /f "tokens=2 delims=:," %%a in ('findstr "version" "bin\Debug\net48\plugin_config.json"') do (
-        set "V=%%~a"
-        set "V=!V: =!"
-        set "V=!V:"=!"
-        if not "!V!"=="" set "VERSION=!V!"
-    )
-)
 
 echo Version: %VERSION%
 echo.
@@ -32,7 +23,7 @@ if errorlevel 1 (
 echo Build OK.
 echo.
 
-REM Prepare package directory
+REM Prepare package directory (flat structure, no subfolder)
 set PKGDIR=release\SwAiPlugin_v%VERSION%
 echo [2/3] Packaging to %PKGDIR%...
 
@@ -40,13 +31,11 @@ if exist "release" rd /s /q "release"
 mkdir "%PKGDIR%"
 mkdir "%PKGDIR%\Data"
 
-REM Copy main DLL and dependencies
+REM Copy main DLL and dependencies (all at root level)
 copy "bin\Debug\net48\SwComAddin.dll" "%PKGDIR%\" >nul
 copy "bin\Debug\net48\SwComAddin.tlb" "%PKGDIR%\" >nul
 copy "bin\Debug\net48\SolidWorks.Interop.sldworks.dll" "%PKGDIR%\" >nul
 copy "bin\Debug\net48\SolidWorks.Interop.swconst.dll" "%PKGDIR%\" >nul
-
-REM Copy .NET dependencies
 copy "bin\Debug\net48\Microsoft.Bcl.AsyncInterfaces.dll" "%PKGDIR%\" >nul
 copy "bin\Debug\net48\System.Buffers.dll" "%PKGDIR%\" >nul
 copy "bin\Debug\net48\System.Memory.dll" "%PKGDIR%\" >nul
@@ -61,7 +50,7 @@ REM Copy data files
 copy "bin\Debug\net48\Data\standard_parts.json" "%PKGDIR%\Data\" >nul
 if exist "bin\Debug\net48\Data\custom_library.json" copy "bin\Debug\net48\Data\custom_library.json" "%PKGDIR%\Data\" >nul
 
-REM Copy install scripts
+REM Copy install scripts (at root level, user sees them first)
 copy "install.bat" "%PKGDIR%\" >nul
 copy "uninstall.bat" "%PKGDIR%\" >nul
 
@@ -80,10 +69,13 @@ echo   Package created!
 echo.
 echo   %~dp0release\SwAiPlugin_v%VERSION%.zip
 echo.
-echo   Next: Upload to GitHub Release
-echo   1. git tag v%VERSION%
-echo   2. git push origin v%VERSION%
-echo   3. Create Release on GitHub, upload ZIP
+echo   ZIP 内结构（用户解压后直接看到）：
+echo   SwAiPlugin_v%VERSION%\
+echo     install.bat          ← 双击安装
+echo     uninstall.bat        ← 双击卸载
+echo     SwComAddin.dll       + 其他依赖
+echo     plugin_config.json
+echo     Data\standard_parts.json
 echo ========================================
 echo.
 pause
