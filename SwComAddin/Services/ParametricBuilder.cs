@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SolidWorks.Interop.sldworks;
 
 namespace SwComAddin.Services
@@ -125,7 +126,7 @@ namespace SwComAddin.Services
                 ExtrudeBoss(featMgr, thick / 1000.0);
 
                 part.SaveAs2($"flange_{(int)outerD}_{(int)innerD}.sldprt", 0, false, false);
-                return (true, $"法兰: 外径{outerD}, 内径{innerD}, {bolts}孔");
+                return (true, $"法兰: 外径{outerD}mm, 内径{innerD}mm, {bolts}孔");
             }
             catch (Exception ex) { return (false, ex.Message); }
         }
@@ -152,7 +153,7 @@ namespace SwComAddin.Services
                 }
 
                 part.SaveAs2($"shaft_{segs.Count}seg.sldprt", 0, false, false);
-                return (true, $"阶梯轴: {segs.Count}段");
+                return (true, $"阶梯轴: {segs.Count}段, 总长{segs.Sum(s => s.Item2)}mm");
             }
             catch (Exception ex) { return (false, ex.Message); }
         }
@@ -207,7 +208,7 @@ namespace SwComAddin.Services
                 ExtrudeBoss(featMgr, bt / 1000.0);
 
                 part.SaveAs2($"bracket_{(int)bw}.sldprt", 0, false, false);
-                return (true, $"支架: 底座{bw}x{bh}, 臂高{ah}");
+                return (true, $"支架: 底座{bw}x{bh}mm, 臂高{ah}mm");
             }
             catch (Exception ex) { return (false, ex.Message); }
         }
@@ -345,7 +346,7 @@ namespace SwComAddin.Services
                 ExtrudeBoss(featMgr, thickness / 1000.0);
 
                 part.SaveAs2($"washer_{(int)innerD}x{(int)outerD}.sldprt", 0, false, false);
-                return (true, $"垫圈: 内径{innerD}, 外径{outerD}, 厚{thickness}mm");
+                return (true, $"垫圈: 内径{innerD}mm, 外径{outerD}mm, 厚{thickness}mm");
             }
             catch (Exception ex) { return (false, ex.Message); }
         }

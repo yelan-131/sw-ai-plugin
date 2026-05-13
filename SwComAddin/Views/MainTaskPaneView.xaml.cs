@@ -21,28 +21,40 @@ namespace SwComAddin.Views
 {
     public partial class MainTaskPaneView : UserControl
     {
+        // === Constants ===
+
+        private const string DefaultBackendUrl = "http://localhost:8765";
+        private const string PlaceholderSearchText = "搜索零件...";
+        private const int HttpTimeoutSeconds = 60;
+        private const int UpdateCheckIntervalHours = 4;
+        private static readonly string BaseDir = Path.GetDirectoryName(
+            typeof(MainTaskPaneView).Assembly.Location);
+        private static readonly string ConfigPath = Path.Combine(BaseDir, "plugin_config.json");
+        private static readonly string CustomLibPath = Path.Combine(BaseDir, "Data", "custom_library.json");
+        private static readonly string LogFilePath = Path.Combine(
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop), "SwAddin.log");
+
+        // === Private fields ===
+
         private readonly SwConnector _connector;
         private HttpClient _httpClient;
         private StandardPart? _selectedPart;
         private string? _selectedTemplate;
-        private string _backendUrl = "http://localhost:8765";
-        private string _modelLibPath = "";  // local folder or http://server/models/
-        private string _version = "0.1.0";
-        private UpdateService _updateService;
+        private string _backendUrl = DefaultBackendUrl;
+        private string _modelLibPath = "";
+        private string _version = "0.1.1";
+        private readonly UpdateService _updateService;
         private string? _pendingUpdateUrl;
         private string? _pendingUpdateVersion;
         private bool _updatePanelOpen;
-
-        private static readonly string BaseDir = Path.GetDirectoryName(
-            typeof(MainTaskPaneView).Assembly.Location);
-
-        private static readonly string ConfigPath = Path.Combine(BaseDir, "plugin_config.json");
-
-        private static readonly string CustomLibPath = Path.Combine(BaseDir, "Data", "custom_library.json");
-
+        private bool _versionPopupOpen;
         private CustomLibraryData _customData = new();
+        private readonly PartsSearchService _searchService = new();
+        private readonly CustomCategoryService _categoryService;
+        private List<Category> _allCategories = new();
+        private System.Windows.Threading.DispatcherTimer? _updateTimer;
 
-        // --- Inner classes ---
+        // === Inner classes ===
 
         public class ParamInput : INotifyPropertyChanged
         {
@@ -52,18 +64,20 @@ namespace SwComAddin.Views
             private string _value = "";
             public string Value { get => _value; set { _value = value; OnPropertyChanged(); } }
             public event PropertyChangedEventHandler? PropertyChanged;
-            private void OnPropertyChanged([CallerMemberName] string? n = null)
-                => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+            private void OnPropertyChanged([CallerMemberName] string? name = null)
+                => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
 
         public class ChatMsg
         {
             public string Text { get; set; } = "";
-            public Brush Bg { get; set; } = Brushes.White;
-            public Brush Fg { get; set; } = Brushes.Black;
+            public Brush BackgroundBrush { get; set; } = Brushes.White;
+            public Brush ForegroundBrush { get; set; } = Brushes.Black;
+            public Brush Bg => BackgroundBrush;
+            public Brush Fg => ForegroundBrush;
         }
 
-        // --- Standard parametric templates ---
+        // === Standard parametric templates ===
 
         private static readonly Dictionary<string, List<ParamInput>> Templates = new()
         {
@@ -138,8 +152,9 @@ namespace SwComAddin.Views
         {
             InitializeComponent();
             _connector = connector;
+            _categoryService = new CustomCategoryService(BaseDir);
             LoadConfig();
-            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
             _updateService = new UpdateService();
             BackendUrlInput.Text = _backendUrl;
             ModelLibPathInput.Text = _modelLibPath;
@@ -164,12 +179,12 @@ namespace SwComAddin.Views
                 {
                     var json = File.ReadAllText(ConfigPath);
                     var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("backend_url", out var urlEl))
-                        _backendUrl = urlEl.GetString() ?? "http://localhost:8765";
-                    if (doc.RootElement.TryGetProperty("model_library_path", out var mlEl))
-                        _modelLibPath = mlEl.GetString() ?? "";
-                    if (doc.RootElement.TryGetProperty("version", out var vEl))
-                        _version = vEl.GetString() ?? "1.0.0";
+                    if (doc.RootElement.TryGetProperty("backend_url", out var urlElement))
+                        _backendUrl = urlElement.GetString() ?? DefaultBackendUrl;
+                    if (doc.RootElement.TryGetProperty("model_library_path", out var modelElement))
+                        _modelLibPath = modelElement.GetString() ?? "";
+                    if (doc.RootElement.TryGetProperty("version", out var versionElement))
+                        _version = versionElement.GetString() ?? "1.0.0";
                 }
             }
             catch { }
@@ -199,6 +214,11 @@ namespace SwComAddin.Views
             ShowPage(PageSettings);
         }
 
+        private void HelpBtn_Click(object sender, RoutedEventArgs e)
+        {
+            ShowPage(PageHelp);
+        }
+
         private void ShowPage(UIElement page)
         {
             if (PageParts == null) return;
@@ -207,61 +227,51 @@ namespace SwComAddin.Views
             PageParam.Visibility = page == PageParam ? Visibility.Visible : Visibility.Collapsed;
             PageAI.Visibility = page == PageAI ? Visibility.Visible : Visibility.Collapsed;
             PageSettings.Visibility = page == PageSettings ? Visibility.Visible : Visibility.Collapsed;
+            PageHelp.Visibility = page == PageHelp ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // === Keyboard Focus Fix (critical for WPF inside ElementHost) ===
 
         private void ParamInput_Focus(object sender, MouseButtonEventArgs e)
         {
-            if (sender is TextBox tb)
+            if (sender is TextBox textBox)
             {
-                tb.Focus();
-                Keyboard.Focus(tb);
+                textBox.Focus();
+                Keyboard.Focus(textBox);
                 e.Handled = true;
             }
         }
 
-        // === Search Box Placeholder ===
-
-        private bool _searchFocused = false;
+        // === Search Box Handling (delegates to PartsSearchService) ===
 
         private void PartsSearch_GotFocus(object sender, RoutedEventArgs e)
         {
-            _searchFocused = true;
-            if (PartsSearch.Text == "搜索零件...")
-                PartsSearch.Text = "";
-            PartsSearch.Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
+            _searchService.OnSearchGotFocus(PartsSearch);
         }
 
         private void PartsSearch_LostFocus(object sender, RoutedEventArgs e)
         {
-            _searchFocused = false;
-            if (string.IsNullOrWhiteSpace(PartsSearch.Text))
-            {
-                PartsSearch.Text = "搜索零件...";
-                PartsSearch.Foreground = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99));
-            }
+            _searchService.OnSearchLostFocus(PartsSearch);
         }
 
         private void PartsSearch_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter)
             {
-                var keyword = PartsSearch.Text.Trim();
-                if (keyword == "搜索零件..." || string.IsNullOrEmpty(keyword))
+                var keyword = _searchService.GetSearchText(PartsSearch);
+                if (string.IsNullOrEmpty(keyword))
                     LoadPartsLibrary();
             }
         }
 
+        private void PartsSearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var keyword = _searchService.GetSearchText(PartsSearch);
+            _searchService.ApplySearch(PartsTree, keyword);
+        }
+
         // === Tab 1: Standard Parts Tree ===
 
-        /// <summary>
-        /// Build 3-level HierarchicalDataTemplates in code so they correctly
-        /// resolve the model types from SwComAddin.Models namespace.
-        /// Level 1: Category -> bind SubCategories (if any) or fallback to Parts
-        /// Level 2: SubCategory -> bind Parts
-        /// Level 3: StandardPart -> display Name, handle click
-        /// </summary>
         private void SetupTreeViewTemplates()
         {
             // Level 3: StandardPart (leaf node)
@@ -273,9 +283,8 @@ namespace SwComAddin.Views
             var partText = new FrameworkElementFactory(typeof(TextBlock));
             partText.SetValue(TextBlock.FontSizeProperty, 11.0);
             partText.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)));
-            // Prefix name with a dash separator
             var dashRun = new FrameworkElementFactory(typeof(Run));
-            dashRun.SetValue(Run.TextProperty, "– ");
+            dashRun.SetValue(Run.TextProperty, "- ");
             dashRun.SetValue(Run.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)));
             partText.AppendChild(dashRun);
             var nameRun = new FrameworkElementFactory(typeof(Run));
@@ -284,67 +293,52 @@ namespace SwComAddin.Views
             partText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
             partText.AddHandler(TextBlock.MouseDownEvent, new MouseButtonEventHandler(Part_MouseDown));
             partFactory.AppendChild(partText);
-
             partTemplate.VisualTree = partFactory;
 
             // Level 2: SubCategory -> bind Parts
             var subCatTemplate = new HierarchicalDataTemplate();
             subCatTemplate.ItemsSource = new System.Windows.Data.Binding("Parts");
-
             var subCatFactory = new FrameworkElementFactory(typeof(StackPanel));
             subCatFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
             subCatFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 1, 2, 1));
-
             var subCatIcon = new FrameworkElementFactory(typeof(TextBlock));
-            subCatIcon.SetValue(TextBlock.TextProperty, "");
+            subCatIcon.SetValue(TextBlock.TextProperty, "");
             subCatIcon.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Segoe MDL2 Assets"));
             subCatIcon.SetValue(TextBlock.FontSizeProperty, 11.0);
             subCatIcon.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x6A, 0xA8, 0xD7)));
             subCatIcon.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 5, 0));
             subCatIcon.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             subCatFactory.AppendChild(subCatIcon);
-
             var subCatText = new FrameworkElementFactory(typeof(TextBlock));
             subCatText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
             subCatText.SetValue(TextBlock.FontSizeProperty, 12.0);
             subCatText.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)));
             subCatFactory.AppendChild(subCatText);
-
             subCatTemplate.VisualTree = subCatFactory;
             subCatTemplate.ItemTemplate = partTemplate;
 
             // Level 1: Category -> bind SubCategories
             var catTemplate = new HierarchicalDataTemplate();
             catTemplate.ItemsSource = new System.Windows.Data.Binding("SubCategories");
-
             var catFactory = new FrameworkElementFactory(typeof(StackPanel));
             catFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
             catFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2));
-
             var catIcon = new FrameworkElementFactory(typeof(TextBlock));
-            catIcon.SetValue(TextBlock.TextProperty, "");
+            catIcon.SetValue(TextBlock.TextProperty, "");
             catIcon.SetValue(TextBlock.FontFamilyProperty, new FontFamily("Segoe MDL2 Assets"));
             catIcon.SetValue(TextBlock.FontSizeProperty, 12.0);
             catIcon.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xDA, 0xA5, 0x20)));
             catIcon.SetValue(TextBlock.MarginProperty, new Thickness(0, 0, 5, 0));
             catIcon.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             catFactory.AppendChild(catIcon);
-
             var catText = new FrameworkElementFactory(typeof(TextBlock));
             catText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
             catText.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
             catText.SetValue(TextBlock.FontSizeProperty, 12.0);
             catText.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
             catFactory.AppendChild(catText);
-
             catTemplate.VisualTree = catFactory;
             catTemplate.ItemTemplate = subCatTemplate;
-
-            // For categories that only have flat Parts (no SubCategories),
-            // we need a second template that binds Parts directly.
-            // We handle this by ensuring the data always has SubCategories populated.
-            // If a category has SubCategories.Count==0 but Parts.Count>0, we wrap Parts
-            // into pseudo-subcategories in LoadPartsLibrary().
 
             PartsTree.ItemTemplate = catTemplate;
         }
@@ -360,22 +354,29 @@ namespace SwComAddin.Views
                 var catalog = JsonSerializer.Deserialize<StandardPartsCatalog>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                if (catalog != null)
+                if (catalog == null) return;
+
+                // Ensure SubCategories are populated for categories that only have flat Parts
+                foreach (var category in catalog.Categories)
                 {
-                    foreach (var cat in catalog.Categories)
+                    _categoryService.RegisterDefaultCategory(category.Name);
+
+                    if ((category.SubCategories == null || category.SubCategories.Count == 0)
+                        && category.Parts != null && category.Parts.Count > 0)
                     {
-                        if ((cat.SubCategories == null || cat.SubCategories.Count == 0)
-                            && cat.Parts != null && cat.Parts.Count > 0)
+                        category.SubCategories = new List<SubCategory>
                         {
-                            cat.SubCategories = new List<SubCategory>
-                            {
-                                new() { Name = cat.Name, Parts = cat.Parts }
-                            };
-                        }
+                            new() { Name = category.Name, Parts = category.Parts }
+                        };
                     }
-                    Log($"Parts loaded: {catalog.Categories.Count} categories");
-                    PartsTree.ItemsSource = catalog.Categories;
                 }
+
+                _allCategories = catalog.Categories;
+
+                // Load custom categories alongside default ones
+                LoadCombinedTree();
+
+                Log($"Parts loaded: {catalog.Categories.Count} categories");
             }
             catch (Exception ex)
             {
@@ -383,132 +384,214 @@ namespace SwComAddin.Views
             }
         }
 
+        private void LoadCombinedTree()
+        {
+            var combined = new List<Category>(_allCategories);
+
+            // Add custom categories
+            foreach (var customCat in _categoryService.GetCategories())
+            {
+                combined.Add(new Category
+                {
+                    Name = customCat.Name,
+                    SubCategories = customCat.SubCategories,
+                    Parts = customCat.Parts
+                });
+            }
+
+            PartsTree.ItemsSource = combined;
+        }
+
         private void PartsTree_Expanded(object sender, RoutedEventArgs e)
         {
-            if (e.OriginalSource is TreeViewItem tvi)
-                tvi.IsExpanded = true;
+            if (e.OriginalSource is TreeViewItem item)
+                item.IsExpanded = true;
+        }
+
+        private void PartsTree_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            // Right-click context menu for custom categories
+            if (e.OriginalSource is FrameworkElement element)
+            {
+                // Walk up to find the TreeViewItem and its DataContext
+                var treeViewItem = FindAncestor<TreeViewItem>(element);
+                if (treeViewItem?.DataContext is Category category)
+                {
+                    ShowCategoryContextMenu(treeViewItem, category, e);
+                }
+            }
+        }
+
+        private void ShowCategoryContextMenu(TreeViewItem item, Category category, ContextMenuEventArgs e)
+        {
+            if (_categoryService.IsDefaultCategory(category.Name)) return;
+
+            var menu = new ContextMenu();
+            var renameItem = new MenuItem { Header = "重命名" };
+            renameItem.Click += (_, _) => RenameCategoryDialog(category.Name);
+            menu.Items.Add(renameItem);
+
+            var deleteItem = new MenuItem { Header = "删除" };
+            deleteItem.Click += (_, _) => DeleteCustomCategory(category.Name);
+            menu.Items.Add(deleteItem);
+
+            item.ContextMenu = menu;
+        }
+
+        private void AddCategoryBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var name = ShowInputDialog("添加自定义分类", "请输入分类名称:");
+            if (string.IsNullOrWhiteSpace(name)) return;
+
+            var error = _categoryService.AddCategory(name);
+            if (error != null)
+            {
+                MessageBox.Show(error, "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            LoadCombinedTree();
+        }
+
+        private void RenameCategoryDialog(string oldName)
+        {
+            var newName = ShowInputDialog("重命名分类", $"将 \"{oldName}\" 重命名为:");
+            if (string.IsNullOrWhiteSpace(newName)) return;
+
+            var error = _categoryService.RenameCategory(oldName, newName);
+            if (error != null)
+            {
+                MessageBox.Show(error, "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            LoadCombinedTree();
+        }
+
+        private void DeleteCustomCategory(string name)
+        {
+            var result = MessageBox.Show($"确定要删除自定义分类 \"{name}\" 吗？", "确认删除",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result != MessageBoxResult.Yes) return;
+
+            var error = _categoryService.DeleteCategory(name);
+            if (error != null)
+            {
+                MessageBox.Show(error, "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            LoadCombinedTree();
         }
 
         private void Part_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            // The DataContext comes from the TextBlock inside the DataTemplate
-            var fe = sender as FrameworkElement;
-            if (fe?.DataContext is StandardPart part)
+            var element = sender as FrameworkElement;
+            if (element?.DataContext is StandardPart part)
             {
                 _selectedPart = part;
-                PartDetailBorder.Visibility = Visibility.Visible;
-                PartName.Text = part.Name;
-                PartStandard.Text = part.Standard;
-                PartDesc.Text = part.Description;
-
-                // Show specs (skip non-display fields)
-                PartSpecs.Items.Clear();
-                if (part.Specs != null)
-                {
-                    var skipKeys = new HashSet<string> { "l_options", "lg_min" };
-                    foreach (var kv in part.Specs)
-                    {
-                        if (!skipKeys.Contains(kv.Key))
-                            PartSpecs.Items.Add(new { Key = kv.Key, Value = kv.Value?.ToString() ?? "" });
-                    }
-                }
-
-                // Show schematic preview with dimensions
-                try { PartPreview.ShowPart(part.Name, part.Standard, part.Specs, part.FeatureTemplate); }
-                catch (Exception ex) { Log($"PartPreview failed: {ex.Message}"); }
-
-                // Toggle parametric vs external UI
-                bool isParametric = part.Geometric;
-                if (isParametric)
-                {
-                    // Hide read-only specs table, show editable params instead
-                    PartSpecs.Visibility = Visibility.Collapsed;
-                    ParamEditPanel.Visibility = Visibility.Visible;
-                    GeneratePartBtn.Visibility = Visibility.Visible;
-                    InsertBtn.Visibility = Visibility.Collapsed;
-
-                    // Build editable parameter inputs from specs
-                    PartParamInputs.Items.Clear();
-                    var editableKeys = new Dictionary<string, string>
-                    {
-                        ["d"] = "直径", ["diameter"] = "直径",
-                        ["l_default"] = "长度", ["length"] = "长度",
-                        ["s"] = "对边宽度", ["width_across_flats"] = "对边宽度",
-                        ["k"] = "头部高度", ["head_height"] = "头部高度",
-                        ["e"] = "头部外接圆", ["head_diameter"] = "头部直径",
-                        ["thickness"] = "厚度", ["height"] = "高度",
-                        ["inner_diameter"] = "内径", ["outer_diameter"] = "外径",
-                        ["chamfer_size"] = "倒角"
-                    };
-                    var units = new Dictionary<string, string>
-                    {
-                        ["d"] = "mm", ["diameter"] = "mm", ["l_default"] = "mm", ["length"] = "mm",
-                        ["s"] = "mm", ["k"] = "mm", ["e"] = "mm", ["thickness"] = "mm",
-                        ["height"] = "mm", ["inner_diameter"] = "mm", ["outer_diameter"] = "mm",
-                        ["chamfer_size"] = "mm", ["head_height"] = "mm", ["head_diameter"] = "mm",
-                        ["width_across_flats"] = "mm"
-                    };
-                    foreach (var kv in editableKeys)
-                    {
-                        if (part.Specs.TryGetValue(kv.Key, out var val) && val != null)
-                        {
-                            PartParamInputs.Items.Add(new ParamInput
-                            {
-                                Key = kv.Key,
-                                Label = kv.Value,
-                                Value = val.ToString() ?? "",
-                                Unit = units.TryGetValue(kv.Key, out var u) ? u : "mm"
-                            });
-                        }
-                    }
-                }
-                else
-                {
-                    PartSpecs.Visibility = Visibility.Visible;
-                    ParamEditPanel.Visibility = Visibility.Collapsed;
-                    GeneratePartBtn.Visibility = Visibility.Collapsed;
-                    InsertBtn.Visibility = Visibility.Visible;
-                }
-
-                GenerateResultText.Visibility = Visibility.Collapsed;
+                ShowPartDetail(part);
                 e.Handled = true;
             }
+        }
+
+        private void ShowPartDetail(StandardPart part)
+        {
+            PartDetailEmpty.Visibility = Visibility.Collapsed;
+            PartDetailBorder.Visibility = Visibility.Visible;
+            PartName.Text = part.Name;
+            PartStandard.Text = part.Standard;
+            PartDesc.Text = part.Description;
+
+            // Show specs table
+            PartSpecs.Items.Clear();
+            if (part.Specs != null)
+            {
+                var skipKeys = new HashSet<string> { "l_options", "lg_min" };
+                foreach (var entry in part.Specs)
+                {
+                    if (!skipKeys.Contains(entry.Key))
+                        PartSpecs.Items.Add(new { Key = entry.Key, Value = entry.Value?.ToString() ?? "" });
+                }
+            }
+
+            // Show schematic preview
+            try { PartPreview.ShowPart(part.Name, part.Standard, part.Specs, part.FeatureTemplate); }
+            catch (Exception ex) { Log($"PartPreview failed: {ex.Message}"); }
+
+            // Toggle parametric vs external UI
+            bool isParametric = part.Geometric;
+            if (isParametric)
+            {
+                ShowParametricUI(part);
+            }
+            else
+            {
+                ShowExternalUI();
+            }
+
+            GenerateResultText.Visibility = Visibility.Collapsed;
+        }
+
+        private void ShowParametricUI(StandardPart part)
+        {
+            PartSpecs.Visibility = Visibility.Collapsed;
+            ParamEditPanel.Visibility = Visibility.Visible;
+            GeneratePartBtn.Visibility = Visibility.Visible;
+            InsertBtn.Visibility = Visibility.Collapsed;
+
+            PartParamInputs.Items.Clear();
+            var editableKeys = new Dictionary<string, string>
+            {
+                ["d"] = "直径", ["diameter"] = "直径",
+                ["l_default"] = "长度", ["length"] = "长度",
+                ["s"] = "对边宽度", ["width_across_flats"] = "对边宽度",
+                ["k"] = "头部高度", ["head_height"] = "头部高度",
+                ["e"] = "头部外接圆", ["head_diameter"] = "头部直径",
+                ["thickness"] = "厚度", ["height"] = "高度",
+                ["inner_diameter"] = "内径", ["outer_diameter"] = "外径",
+                ["chamfer_size"] = "倒角"
+            };
+            var unitMap = new Dictionary<string, string>
+            {
+                ["d"] = "mm", ["diameter"] = "mm", ["l_default"] = "mm", ["length"] = "mm",
+                ["s"] = "mm", ["k"] = "mm", ["e"] = "mm", ["thickness"] = "mm",
+                ["height"] = "mm", ["inner_diameter"] = "mm", ["outer_diameter"] = "mm",
+                ["chamfer_size"] = "mm", ["head_height"] = "mm", ["head_diameter"] = "mm",
+                ["width_across_flats"] = "mm"
+            };
+
+            foreach (var mapping in editableKeys)
+            {
+                if (part.Specs.TryGetValue(mapping.Key, out var value) && value != null)
+                {
+                    PartParamInputs.Items.Add(new ParamInput
+                    {
+                        Key = mapping.Key,
+                        Label = mapping.Value,
+                        Value = value.ToString() ?? "",
+                        Unit = unitMap.TryGetValue(mapping.Key, out var unit) ? unit : "mm"
+                    });
+                }
+            }
+        }
+
+        private void ShowExternalUI()
+        {
+            PartSpecs.Visibility = Visibility.Visible;
+            ParamEditPanel.Visibility = Visibility.Collapsed;
+            GeneratePartBtn.Visibility = Visibility.Collapsed;
+            InsertBtn.Visibility = Visibility.Visible;
         }
 
         private void GeneratePartBtn_Click(object sender, RoutedEventArgs e)
         {
             if (_selectedPart == null) return;
 
-            // Sync TextBox values
-            foreach (var container in PartParamInputs.Items)
-            {
-                if (container is ParamInput pi)
-                {
-                    var element = PartParamInputs.ItemContainerGenerator.ContainerFromItem(container);
-                    if (element is FrameworkElement fe)
-                    {
-                        var tb = FindVisualChild<System.Windows.Controls.TextBox>(fe);
-                        if (tb != null)
-                        {
-                            var binding = tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
-                            binding?.UpdateSource();
-                        }
-                    }
-                }
-            }
+            SyncParamInputValues();
+            var parameters = CollectParamInputs();
 
-            var parameters = new Dictionary<string, object>();
-            foreach (var item in PartParamInputs.Items)
-            {
-                if (item is ParamInput pi)
-                {
-                    if (double.TryParse(pi.Value, out var d)) parameters[pi.Key] = d;
-                    else if (int.TryParse(pi.Value, out var i)) parameters[pi.Key] = i;
-                    else parameters[pi.Key] = pi.Value;
-                }
-            }
-
-            // Normalize key names: l_default -> length, d -> diameter, s -> width_across_flats, k -> head_height, e -> head_diameter
+            // Normalize key names
             if (parameters.ContainsKey("l_default")) parameters["length"] = parameters["l_default"];
             if (parameters.ContainsKey("d") && !parameters.ContainsKey("diameter")) parameters["diameter"] = parameters["d"];
             if (parameters.ContainsKey("s") && !parameters.ContainsKey("width_across_flats")) parameters["width_across_flats"] = parameters["s"];
@@ -538,63 +621,61 @@ namespace SwComAddin.Views
             try
             {
                 var swApp = (ISldWorks)_connector.GetSwApp();
-
-                // Try to find model file in local library
-                string? foundFile = null;
-                if (!string.IsNullOrEmpty(_modelLibPath) && Directory.Exists(_modelLibPath))
-                {
-                    var extensions = new[] { ".step", ".stp", ".iges", ".igs", ".x_t", ".sldprt" };
-                    foreach (var ext in extensions)
-                    {
-                        var candidate = Path.Combine(_modelLibPath, _selectedPart.Id + ext);
-                        if (File.Exists(candidate))
-                        {
-                            foundFile = candidate;
-                            break;
-                        }
-                    }
-                    // Also search subdirectories by category-like naming
-                    if (foundFile == null)
-                    {
-                        foreach (var ext in extensions)
-                        {
-                            var matches = Directory.GetFiles(_modelLibPath, _selectedPart.Id + ext, SearchOption.AllDirectories);
-                            if (matches.Length > 0)
-                            {
-                                foundFile = matches[0];
-                                break;
-                            }
-                        }
-                    }
-                }
+                var foundFile = FindModelFile();
 
                 if (foundFile != null)
                 {
                     int err = 0, warn = 0;
                     int docType = foundFile.EndsWith(".sldprt") ? 1 :
-                                  foundFile.EndsWith(".sldasm") ? 2 : 1; // STEP/IGES open as part
+                                  foundFile.EndsWith(".sldasm") ? 2 : 1;
                     swApp.OpenDoc6(foundFile, docType, 0, "", ref err, ref warn);
                     MessageBox.Show($"已加载: {_selectedPart.Name}\n来源: {foundFile}", "SW AI Plugin");
                 }
                 else
                 {
-                    var source = _selectedPart.Specs?.ContainsKey("download_source") == true
-                        ? _selectedPart.Specs["download_source"]?.ToString() : "";
-                    var msg = $"零件 \"{_selectedPart.Name}\" 本地无模型文件。\n\n";
-                    if (!string.IsNullOrEmpty(_modelLibPath))
-                        msg += $"模型库路径: {_modelLibPath}\n";
-                    else
-                        msg += "未配置模型库路径，请在设置中指定。\n";
-                    msg += $"\n请将 STEP 文件命名为 {_selectedPart.Id}.step 放入模型库目录。";
-                    if (!string.IsNullOrEmpty(source))
-                        msg += $"\n\n下载来源: {source}";
-                    MessageBox.Show(msg, "SW AI Plugin - 未找到模型", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ShowModelNotFoundMessage();
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"插入失败: {ex.Message}", "SW AI Plugin");
             }
+        }
+
+        private string? FindModelFile()
+        {
+            if (string.IsNullOrEmpty(_modelLibPath) || !Directory.Exists(_modelLibPath))
+                return null;
+
+            var extensions = new[] { ".step", ".stp", ".iges", ".igs", ".x_t", ".sldprt" };
+            foreach (var ext in extensions)
+            {
+                var candidate = Path.Combine(_modelLibPath, _selectedPart!.Id + ext);
+                if (File.Exists(candidate)) return candidate;
+            }
+
+            foreach (var ext in extensions)
+            {
+                var matches = Directory.GetFiles(_modelLibPath, _selectedPart!.Id + ext, SearchOption.AllDirectories);
+                if (matches.Length > 0) return matches[0];
+            }
+
+            return null;
+        }
+
+        private void ShowModelNotFoundMessage()
+        {
+            var source = _selectedPart!.Specs?.ContainsKey("download_source") == true
+                ? _selectedPart.Specs["download_source"]?.ToString() : "";
+            var message = $"零件 \"{_selectedPart.Name}\" 本地无模型文件。\n\n";
+            if (!string.IsNullOrEmpty(_modelLibPath))
+                message += $"模型库路径: {_modelLibPath}\n";
+            else
+                message += "未配置模型库路径，请在设置中指定。\n";
+            message += $"\n请将 STEP 文件命名为 {_selectedPart.Id}.step 放入模型库目录。";
+            if (!string.IsNullOrEmpty(source))
+                message += $"\n\n下载来源: {source}";
+            MessageBox.Show(message, "SW AI Plugin - 未找到模型", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         // === Tab 2: Custom Library ===
@@ -611,6 +692,9 @@ namespace SwComAddin.Views
                 }
             }
             catch { }
+
+            // Also load into category service
+            _categoryService.Load();
             RefreshCustomLists();
         }
 
@@ -637,18 +721,16 @@ namespace SwComAddin.Views
 
         private void AddCustomPart_Click(object sender, RoutedEventArgs e)
         {
-            // Simple input dialog: ask for part name
             var input = ShowInputDialog("添加零件", "请输入零件名称:");
             if (string.IsNullOrWhiteSpace(input)) return;
 
-            var cat = ShowInputDialog("分类", "请输入分类 (可选):") ?? "";
-            var part = new CustomPart
+            var category = ShowInputDialog("分类", "请输入分类 (可选):") ?? "";
+            _customData.Parts.Add(new CustomPart
             {
                 Name = input.Trim(),
-                Category = cat.Trim(),
+                Category = category.Trim(),
                 Notes = ""
-            };
-            _customData.Parts.Add(part);
+            });
             SaveCustomLibrary();
             RefreshCustomLists();
         }
@@ -672,9 +754,7 @@ namespace SwComAddin.Views
             var name = ShowInputDialog("添加模板", "请输入模板名称:");
             if (string.IsNullOrWhiteSpace(name)) return;
 
-            var tmpl = new CustomTemplate { Name = name.Trim() };
-
-            // Ask for parameters in a loop
+            var template = new CustomTemplate { Name = name.Trim() };
             while (true)
             {
                 var paramStr = ShowInputDialog("添加参数",
@@ -684,7 +764,7 @@ namespace SwComAddin.Views
                 var parts = paramStr.Split(',');
                 if (parts.Length >= 2)
                 {
-                    tmpl.Parameters.Add(new TemplateParam
+                    template.Parameters.Add(new TemplateParam
                     {
                         Key = parts[0].Trim(),
                         Label = parts[1].Trim(),
@@ -694,7 +774,7 @@ namespace SwComAddin.Views
                 }
             }
 
-            _customData.Templates.Add(tmpl);
+            _customData.Templates.Add(template);
             SaveCustomLibrary();
             RefreshCustomLists();
             RefreshTemplateCombo();
@@ -702,9 +782,9 @@ namespace SwComAddin.Views
 
         private void DeleteCustomTemplate_Click(object sender, RoutedEventArgs e)
         {
-            if (CustomTemplatesList.SelectedItem is CustomTemplate tmpl)
+            if (CustomTemplatesList.SelectedItem is CustomTemplate template)
             {
-                _customData.Templates.Remove(tmpl);
+                _customData.Templates.Remove(template);
                 SaveCustomLibrary();
                 RefreshCustomLists();
                 RefreshTemplateCombo();
@@ -715,44 +795,6 @@ namespace SwComAddin.Views
             }
         }
 
-        /// <summary>
-        /// Simple input dialog using a WPF Window.
-        /// </summary>
-        private static string? ShowInputDialog(string title, string prompt)
-        {
-            var dlg = new Window
-            {
-                Title = title,
-                Width = 320,
-                Height = 180,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                ResizeMode = ResizeMode.NoResize
-            };
-            var stack = new StackPanel { Margin = new Thickness(12) };
-            stack.Children.Add(new TextBlock { Text = prompt, Margin = new Thickness(0, 0, 0, 8) });
-            var input = new TextBox { Padding = new Thickness(6, 4, 6, 4) };
-            stack.Children.Add(input);
-
-            string? result = null;
-            var btnPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0)
-            };
-            var okBtn = new Button { Content = "确定", Width = 60, Height = 26, Margin = new Thickness(0, 0, 8, 0) };
-            var cancelBtn = new Button { Content = "取消", Width = 60, Height = 26 };
-            okBtn.Click += (_, _) => { result = input.Text; dlg.Close(); };
-            cancelBtn.Click += (_, _) => { dlg.Close(); };
-            btnPanel.Children.Add(okBtn);
-            btnPanel.Children.Add(cancelBtn);
-            stack.Children.Add(btnPanel);
-            dlg.Content = stack;
-            input.Focus();
-            dlg.ShowDialog();
-            return result;
-        }
-
         // === Tab 3: Parametric Modeling ===
 
         private void RefreshTemplateCombo()
@@ -761,8 +803,8 @@ namespace SwComAddin.Views
             TemplateCombo.Items.Clear();
             foreach (var name in Templates.Keys)
                 TemplateCombo.Items.Add(new ComboBoxItem { Content = name });
-            foreach (var tmpl in _customData.Templates)
-                TemplateCombo.Items.Add(new ComboBoxItem { Content = tmpl.Name });
+            foreach (var template in _customData.Templates)
+                TemplateCombo.Items.Add(new ComboBoxItem { Content = template.Name });
             if (prevSelection != null)
                 TemplateCombo.SelectedItem = prevSelection;
             Log($"TemplateCombo: {TemplateCombo.Items.Count} items");
@@ -773,8 +815,8 @@ namespace SwComAddin.Views
             if (TemplateCombo.SelectedItem == null) return;
 
             string selected;
-            if (TemplateCombo.SelectedItem is ComboBoxItem cbi)
-                selected = cbi.Content?.ToString() ?? "";
+            if (TemplateCombo.SelectedItem is ComboBoxItem item)
+                selected = item.Content?.ToString() ?? "";
             else
                 selected = TemplateCombo.SelectedItem.ToString() ?? "";
             if (string.IsNullOrEmpty(selected)) return;
@@ -782,27 +824,25 @@ namespace SwComAddin.Views
             _selectedTemplate = selected;
             ParamInputs.Items.Clear();
 
-            // Check standard templates first
-            if (Templates.TryGetValue(selected, out var ps))
+            if (Templates.TryGetValue(selected, out var parameters))
             {
-                foreach (var p in ps)
-                    ParamInputs.Items.Add(p);
+                foreach (var param in parameters)
+                    ParamInputs.Items.Add(param);
                 GenerateBtn.IsEnabled = true;
             }
-            // Check custom templates
             else
             {
                 var custom = _customData.Templates.FirstOrDefault(t => t.Name == selected);
                 if (custom != null)
                 {
-                    foreach (var tp in custom.Parameters)
+                    foreach (var param in custom.Parameters)
                     {
                         ParamInputs.Items.Add(new ParamInput
                         {
-                            Key = tp.Key,
-                            Label = tp.Label,
-                            Value = tp.DefaultValue,
-                            Unit = tp.Unit
+                            Key = param.Key,
+                            Label = param.Label,
+                            Value = param.DefaultValue,
+                            Unit = param.Unit
                         });
                     }
                     GenerateBtn.IsEnabled = true;
@@ -814,34 +854,8 @@ namespace SwComAddin.Views
         {
             if (string.IsNullOrEmpty(_selectedTemplate)) return;
 
-            // Sync TextBox values to ParamInput (binding uses LostFocus)
-            foreach (var container in ParamInputs.Items)
-            {
-                if (container is ParamInput pi)
-                {
-                    var element = ParamInputs.ItemContainerGenerator.ContainerFromItem(container);
-                    if (element is FrameworkElement fe)
-                    {
-                        var tb = FindVisualChild<System.Windows.Controls.TextBox>(fe);
-                        if (tb != null)
-                        {
-                            var binding = tb.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
-                            binding?.UpdateSource();
-                        }
-                    }
-                }
-            }
-
-            var parameters = new Dictionary<string, object>();
-            foreach (var item in ParamInputs.Items)
-            {
-                if (item is ParamInput pi)
-                {
-                    if (double.TryParse(pi.Value, out var d)) parameters[pi.Key] = d;
-                    else if (int.TryParse(pi.Value, out var i)) parameters[pi.Key] = i;
-                    else parameters[pi.Key] = pi.Value;
-                }
-            }
+            SyncParametricInputValues();
+            var parameters = CollectParametricInputs();
 
             var builder = new ParametricBuilder(_connector);
             bool ok;
@@ -849,7 +863,6 @@ namespace SwComAddin.Views
 
             if (Templates.ContainsKey(_selectedTemplate))
             {
-                // Standard template
                 (ok, msg) = _selectedTemplate switch
                 {
                     "法兰" => builder.BuildFlange(parameters),
@@ -866,7 +879,6 @@ namespace SwComAddin.Views
             }
             else
             {
-                // Custom template - for now just show parameters
                 ok = false;
                 msg = $"自定义模板 \"{_selectedTemplate}\" 参数已收集，建模功能开发中";
             }
@@ -884,8 +896,8 @@ namespace SwComAddin.Views
             ChatList.Items.Add(new ChatMsg
             {
                 Text = "SW AI 助手已就绪。输入中文描述即可建模。\n例如: 创建M10螺栓",
-                Bg = new SolidColorBrush(Color.FromRgb(232, 238, 254)),
-                Fg = new SolidColorBrush(Color.FromRgb(33, 33, 33))
+                BackgroundBrush = new SolidColorBrush(Color.FromRgb(232, 238, 254)),
+                ForegroundBrush = new SolidColorBrush(Color.FromRgb(33, 33, 33))
             });
         }
 
@@ -897,44 +909,44 @@ namespace SwComAddin.Views
 
         private async void AiSendBtn_Click(object sender, RoutedEventArgs e)
         {
-            var msg = AiInput.Text.Trim();
-            if (string.IsNullOrEmpty(msg)) return;
+            var message = AiInput.Text.Trim();
+            if (string.IsNullOrEmpty(message)) return;
 
             ChatList.Items.Add(new ChatMsg
             {
-                Text = msg,
-                Bg = new SolidColorBrush(Color.FromRgb(21, 101, 192)),
-                Fg = new SolidColorBrush(Colors.White)
+                Text = message,
+                BackgroundBrush = new SolidColorBrush(Color.FromRgb(21, 101, 192)),
+                ForegroundBrush = new SolidColorBrush(Colors.White)
             });
             AiInput.Text = "";
             AiSendBtn.IsEnabled = false;
 
             try
             {
-                var body = JsonSerializer.Serialize(new { message = msg });
+                var body = JsonSerializer.Serialize(new { message = message });
                 var content = new StringContent(body, Encoding.UTF8, "application/json");
-                var resp = await _httpClient.PostAsync($"{_backendUrl}/api/chat", content);
+                var response = await _httpClient.PostAsync($"{_backendUrl}/api/chat", content);
 
-                if (resp.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode)
                 {
-                    var json = await resp.Content.ReadAsStringAsync();
+                    var json = await response.Content.ReadAsStringAsync();
                     var doc = JsonDocument.Parse(json);
                     var reply = doc.RootElement.GetProperty("reply").GetString() ?? "无回复";
 
                     ChatList.Items.Add(new ChatMsg
                     {
                         Text = reply,
-                        Bg = new SolidColorBrush(Colors.White),
-                        Fg = new SolidColorBrush(Color.FromRgb(33, 33, 33))
+                        BackgroundBrush = new SolidColorBrush(Colors.White),
+                        ForegroundBrush = new SolidColorBrush(Color.FromRgb(33, 33, 33))
                     });
                 }
                 else
                 {
                     ChatList.Items.Add(new ChatMsg
                     {
-                        Text = $"服务错误 ({(int)resp.StatusCode})",
-                        Bg = new SolidColorBrush(Color.FromRgb(255, 235, 238)),
-                        Fg = new SolidColorBrush(Color.FromRgb(198, 40, 40))
+                        Text = $"服务错误 ({(int)response.StatusCode})",
+                        BackgroundBrush = new SolidColorBrush(Color.FromRgb(255, 235, 238)),
+                        ForegroundBrush = new SolidColorBrush(Color.FromRgb(198, 40, 40))
                     });
                 }
             }
@@ -943,8 +955,8 @@ namespace SwComAddin.Views
                 ChatList.Items.Add(new ChatMsg
                 {
                     Text = $"连接失败: {ex.Message}",
-                    Bg = new SolidColorBrush(Color.FromRgb(255, 235, 238)),
-                    Fg = new SolidColorBrush(Color.FromRgb(198, 40, 40))
+                    BackgroundBrush = new SolidColorBrush(Color.FromRgb(255, 235, 238)),
+                    ForegroundBrush = new SolidColorBrush(Color.FromRgb(198, 40, 40))
                 });
             }
 
@@ -968,8 +980,8 @@ namespace SwComAddin.Views
             {
                 var body = JsonSerializer.Serialize(new { anthropic_api_key = key });
                 var content = new StringContent(body, Encoding.UTF8, "application/json");
-                var resp = await _httpClient.PostAsync($"{_backendUrl}/api/config", content);
-                if (resp.IsSuccessStatusCode)
+                var response = await _httpClient.PostAsync($"{_backendUrl}/api/config", content);
+                if (response.IsSuccessStatusCode)
                 {
                     ApiKeyStatus.Text = "API Key 已保存";
                     ApiKeyStatus.Foreground = new SolidColorBrush(Color.FromRgb(46, 125, 50));
@@ -994,10 +1006,10 @@ namespace SwComAddin.Views
         {
             try
             {
-                var resp = await _httpClient.GetAsync($"{_backendUrl}/api/config");
-                if (resp.IsSuccessStatusCode)
+                var response = await _httpClient.GetAsync($"{_backendUrl}/api/config");
+                if (response.IsSuccessStatusCode)
                 {
-                    var json = await resp.Content.ReadAsStringAsync();
+                    var json = await response.Content.ReadAsStringAsync();
                     var doc = JsonDocument.Parse(json);
                     var keySet = doc.RootElement.GetProperty("anthropic_api_key_set").GetBoolean();
                     ApiKeyStatus.Text = keySet ? "API Key 已配置" : "API Key 未配置";
@@ -1035,7 +1047,7 @@ namespace SwComAddin.Views
             _backendUrl = url.TrimEnd('/');
             SaveConfig();
             _httpClient.Dispose();
-            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds) };
             BackendUrlStatus.Text = "已保存，正在重新连接...";
             BackendUrlStatus.Foreground = new SolidColorBrush(Color.FromRgb(255, 143, 0));
             CheckAllStatus();
@@ -1094,12 +1106,12 @@ namespace SwComAddin.Views
             // SolidWorks status
             try
             {
-                bool swOk = _connector.IsConnected;
-                SwStatus.Text = swOk ? "已连接" : "未连接";
-                SwStatus.Foreground = swOk
+                bool isConnected = _connector.IsConnected;
+                SwStatus.Text = isConnected ? "已连接" : "未连接";
+                SwStatus.Foreground = isConnected
                     ? new SolidColorBrush(Color.FromRgb(46, 125, 50))
                     : new SolidColorBrush(Color.FromRgb(198, 40, 40));
-                SwDot.Fill = swOk
+                SwDot.Fill = isConnected
                     ? new SolidColorBrush(Color.FromRgb(46, 125, 50))
                     : new SolidColorBrush(Color.FromRgb(198, 40, 40));
             }
@@ -1112,17 +1124,17 @@ namespace SwComAddin.Views
             // Backend health
             try
             {
-                var resp = await _httpClient.GetAsync($"{_backendUrl}/api/health");
-                bool ok = resp.IsSuccessStatusCode;
-                BackendStatus.Text = ok ? "已连接" : "连接失败";
-                BackendStatus.Foreground = ok
+                var response = await _httpClient.GetAsync($"{_backendUrl}/api/health");
+                bool isOk = response.IsSuccessStatusCode;
+                BackendStatus.Text = isOk ? "已连接" : "连接失败";
+                BackendStatus.Foreground = isOk
                     ? new SolidColorBrush(Color.FromRgb(46, 125, 50))
                     : new SolidColorBrush(Color.FromRgb(198, 40, 40));
-                BackendDot.Fill = ok
+                BackendDot.Fill = isOk
                     ? new SolidColorBrush(Color.FromRgb(46, 125, 50))
                     : new SolidColorBrush(Color.FromRgb(198, 40, 40));
 
-                if (ok)
+                if (isOk)
                 {
                     BackendUrlStatus.Text = "连接正常";
                     BackendUrlStatus.Foreground = new SolidColorBrush(Color.FromRgb(46, 125, 50));
@@ -1140,10 +1152,10 @@ namespace SwComAddin.Views
             // API Key status
             try
             {
-                var resp = await _httpClient.GetAsync($"{_backendUrl}/api/config");
-                if (resp.IsSuccessStatusCode)
+                var response = await _httpClient.GetAsync($"{_backendUrl}/api/config");
+                if (response.IsSuccessStatusCode)
                 {
-                    var json = await resp.Content.ReadAsStringAsync();
+                    var json = await response.Content.ReadAsStringAsync();
                     var doc = JsonDocument.Parse(json);
                     var keySet = doc.RootElement.GetProperty("anthropic_api_key_set").GetBoolean();
                     ApiKeyConfigStatus.Text = keySet ? "已配置" : "未配置";
@@ -1158,46 +1170,59 @@ namespace SwComAddin.Views
                 ApiKeyConfigStatus.Foreground = new SolidColorBrush(Color.FromRgb(158, 158, 158));
             }
 
-            // Footer status bar
             UpdateFooterStatus();
         }
 
         private void UpdateFooterStatus()
         {
-            // AI status
-            bool aiOk = BackendStatus.Text == "已连接";
+            bool isAiOk = BackendStatus.Text == "已连接";
             var okColor = new SolidColorBrush(Color.FromRgb(76, 175, 80));
-            var errColor = new SolidColorBrush(Color.FromRgb(198, 40, 40));
-            StatusAI.Text = aiOk ? "AI ✓" : "AI ✗";
-            StatusAI.Foreground = aiOk ? okColor : errColor;
+            var errorColor = new SolidColorBrush(Color.FromRgb(198, 40, 40));
+
+            StatusAI.Text = isAiOk ? "AI OK" : "AI X";
+            StatusAI.Foreground = isAiOk ? okColor : errorColor;
             StatusAI2.Text = StatusAI.Text;
             StatusAI2.Foreground = StatusAI.Foreground;
 
-            // 标准件库 status
-            bool partsOk = File.Exists(Path.Combine(BaseDir, "Data", "standard_parts.json"));
-            StatusParts.Text = partsOk ? "标准件 ✓" : "标准件 ✗";
-            StatusParts.Foreground = partsOk ? okColor : errColor;
+            bool isPartsOk = File.Exists(Path.Combine(BaseDir, "Data", "standard_parts.json"));
+            StatusParts.Text = isPartsOk ? "标准件 OK" : "标准件 X";
+            StatusParts.Foreground = isPartsOk ? okColor : errorColor;
             StatusParts2.Text = StatusParts.Text;
             StatusParts2.Foreground = StatusParts.Foreground;
 
-            // 模型库 status
-            bool libOk = !string.IsNullOrEmpty(_modelLibPath) && Directory.Exists(_modelLibPath);
-            StatusLib.Text = libOk ? "模型库 ✓" : "模型库 ✗";
-            StatusLib.Foreground = libOk ? okColor : errColor;
+            bool isLibOk = !string.IsNullOrEmpty(_modelLibPath) && Directory.Exists(_modelLibPath);
+            StatusLib.Text = isLibOk ? "模型库 OK" : "模型库 X";
+            StatusLib.Foreground = isLibOk ? okColor : errorColor;
             StatusLib2.Text = StatusLib.Text;
             StatusLib2.Foreground = StatusLib.Foreground;
         }
 
-        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        // === Version Info Popup ===
+
+        private void FooterVersion_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
-            {
-                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
-                if (child is T result) return result;
-                var found = FindVisualChild<T>(child);
-                if (found != null) return found;
-            }
-            return null;
+            _versionPopupOpen = !_versionPopupOpen;
+            VersionPopupVersion.Text = $"v{_version}";
+            VersionPopup.Visibility = _versionPopupOpen ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void VersionCloseBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _versionPopupOpen = false;
+            VersionPopup.Visibility = Visibility.Collapsed;
+        }
+
+        private void VersionCheckUpdateBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _versionPopupOpen = false;
+            VersionPopup.Visibility = Visibility.Collapsed;
+            CheckForUpdateAsync();
+        }
+
+        private void GitHubLink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+            catch { }
         }
 
         // === Update ===
@@ -1214,28 +1239,21 @@ namespace SwComAddin.Views
                     UpdateVersionText.Text = $"新版本 {latest} 可用";
                     UpdateBar.Visibility = Visibility.Visible;
                     StatusBar.Visibility = Visibility.Collapsed;
-                    UpdateTitle.Text = $"v{_version} → {latest}";
+                    UpdateTitle.Text = $"v{_version} -> {latest}";
                     UpdateNotes.Text = notes ?? "暂无更新说明";
                 }
             }
             catch { }
         }
 
-        private System.Windows.Threading.DispatcherTimer? _updateTimer;
-
         private void StartPeriodicUpdateCheck()
         {
             _updateTimer = new System.Windows.Threading.DispatcherTimer
             {
-                Interval = TimeSpan.FromHours(4)
+                Interval = TimeSpan.FromHours(UpdateCheckIntervalHours)
             };
-            _updateTimer.Tick += (s, e) => CheckForUpdateAsync();
+            _updateTimer.Tick += (sender, args) => CheckForUpdateAsync();
             _updateTimer.Start();
-        }
-
-        private void FooterVersion_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            CheckForUpdateAsync();
         }
 
         private void UpdateActionLink_MouseDown(object sender, MouseButtonEventArgs e)
@@ -1257,7 +1275,6 @@ namespace SwComAddin.Views
                 var installDir = BaseDir;
                 var batPath = _updateService.PrepareUpdate(zipPath, installDir);
 
-                // Update local version in config before restart
                 if (_pendingUpdateVersion != null)
                 {
                     _version = _pendingUpdateVersion.TrimStart('v', 'V');
@@ -1290,14 +1307,143 @@ namespace SwComAddin.Views
             UpdatePanel.Visibility = Visibility.Collapsed;
         }
 
-        private static readonly string LogFilePath = Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop), "SwAddin.log");
+        // === Helper Methods ===
 
-        private static void Log(string msg)
+        /// <summary>
+        /// Simple input dialog using a WPF Window.
+        /// </summary>
+        private static string? ShowInputDialog(string title, string prompt)
+        {
+            var dialog = new Window
+            {
+                Title = title,
+                Width = 320,
+                Height = 180,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ResizeMode = ResizeMode.NoResize
+            };
+            var stack = new StackPanel { Margin = new Thickness(12) };
+            stack.Children.Add(new TextBlock { Text = prompt, Margin = new Thickness(0, 0, 0, 8) });
+            var input = new TextBox { Padding = new Thickness(6, 4, 6, 4) };
+            stack.Children.Add(input);
+
+            string? result = null;
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            var okButton = new Button { Content = "确定", Width = 60, Height = 26, Margin = new Thickness(0, 0, 8, 0) };
+            var cancelButton = new Button { Content = "取消", Width = 60, Height = 26 };
+            okButton.Click += (_, _) => { result = input.Text; dialog.Close(); };
+            cancelButton.Click += (_, _) => { dialog.Close(); };
+            buttonPanel.Children.Add(okButton);
+            buttonPanel.Children.Add(cancelButton);
+            stack.Children.Add(buttonPanel);
+            dialog.Content = stack;
+            input.Focus();
+            dialog.ShowDialog();
+            return result;
+        }
+
+        private void SyncParamInputValues()
+        {
+            foreach (var container in PartParamInputs.Items)
+            {
+                if (container is ParamInput paramInput)
+                {
+                    var element = PartParamInputs.ItemContainerGenerator.ContainerFromItem(container);
+                    if (element is FrameworkElement fe)
+                    {
+                        var textBox = FindVisualChild<System.Windows.Controls.TextBox>(fe);
+                        if (textBox != null)
+                        {
+                            var binding = textBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
+                            binding?.UpdateSource();
+                        }
+                    }
+                }
+            }
+        }
+
+        private void SyncParametricInputValues()
+        {
+            foreach (var container in ParamInputs.Items)
+            {
+                if (container is ParamInput paramInput)
+                {
+                    var element = ParamInputs.ItemContainerGenerator.ContainerFromItem(container);
+                    if (element is FrameworkElement fe)
+                    {
+                        var textBox = FindVisualChild<System.Windows.Controls.TextBox>(fe);
+                        if (textBox != null)
+                        {
+                            var binding = textBox.GetBindingExpression(System.Windows.Controls.TextBox.TextProperty);
+                            binding?.UpdateSource();
+                        }
+                    }
+                }
+            }
+        }
+
+        private Dictionary<string, object> CollectParamInputs()
+        {
+            var parameters = new Dictionary<string, object>();
+            foreach (var item in PartParamInputs.Items)
+            {
+                if (item is ParamInput paramInput)
+                {
+                    if (double.TryParse(paramInput.Value, out var doubleValue)) parameters[paramInput.Key] = doubleValue;
+                    else if (int.TryParse(paramInput.Value, out var intValue)) parameters[paramInput.Key] = intValue;
+                    else parameters[paramInput.Key] = paramInput.Value;
+                }
+            }
+            return parameters;
+        }
+
+        private Dictionary<string, object> CollectParametricInputs()
+        {
+            var parameters = new Dictionary<string, object>();
+            foreach (var item in ParamInputs.Items)
+            {
+                if (item is ParamInput paramInput)
+                {
+                    if (double.TryParse(paramInput.Value, out var doubleValue)) parameters[paramInput.Key] = doubleValue;
+                    else if (int.TryParse(paramInput.Value, out var intValue)) parameters[paramInput.Key] = intValue;
+                    else parameters[paramInput.Key] = paramInput.Value;
+                }
+            }
+            return parameters;
+        }
+
+        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is T result) return result;
+                var found = FindVisualChild<T>(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static T FindAncestor<T>(DependencyObject current) where T : DependencyObject
+        {
+            while (current != null)
+            {
+                if (current is T result) return result;
+                current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+            }
+            return null;
+        }
+
+        private static void Log(string message)
         {
             try
             {
-                File.AppendAllText(LogFilePath, $"[{DateTime.Now:HH:mm:ss}] {msg}\n");
+                File.AppendAllText(LogFilePath, $"[{DateTime.Now:HH:mm:ss}] {message}\n");
             }
             catch { }
         }

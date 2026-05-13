@@ -4,8 +4,16 @@ namespace SwComAddin.Models
 {
     public class CustomLibraryData
     {
+        public List<CustomCategory> Categories { get; set; } = new();
         public List<CustomPart> Parts { get; set; } = new();
         public List<CustomTemplate> Templates { get; set; } = new();
+    }
+
+    public class CustomCategory
+    {
+        public string Name { get; set; } = "";
+        public List<SubCategory> SubCategories { get; set; } = new();
+        public List<StandardPart> Parts { get; set; } = new();
     }
 
     public class CustomPart

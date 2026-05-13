@@ -112,13 +112,21 @@
 
         <!-- Header -->
         <Border Grid.Row="0" Background="#0078D7" Padding="12,10">
-            <StackPanel>
-                <TextBlock Text="SW AI Plugin" Foreground="White" FontSize="14" FontWeight="Bold"/>
-                <TextBlock Text="AI 驱动的参数化建模助手" Foreground="#B8D4F0" FontSize="10" Margin="0,2,0,0"/>
-            </StackPanel>
+            <Grid>
+                <StackPanel>
+                    <TextBlock Text="SW AI Plugin" Foreground="White" FontSize="14" FontWeight="Bold"/>
+                    <TextBlock Text="AI 驱动的参数化建模助手" Foreground="#B8D4F0" FontSize="10" Margin="0,2,0,0"/>
+                </StackPanel>
+                <!-- Help button in header -->
+                <Button x:Name="HelpBtn" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
+                        Click="HelpBtn_Click" ToolTip="帮助手册">
+                    <TextBlock Text="&#xE897;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#B8D4F0"/>
+                </Button>
+            </Grid>
         </Border>
 
-        <!-- Tab Bar (5 tabs, underline style) -->
+        <!-- Tab Bar (5 tabs + help, underline style) -->
         <Border Grid.Row="1" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <StackPanel Orientation="Horizontal" Margin="2,0">
@@ -138,11 +146,30 @@
 
         <!-- Content Area -->
         <Grid Grid.Row="2">
-            <!-- Page 1: 标准件库 (Standard Parts) -->
-            <ScrollViewer x:Name="PageParts" VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="8">
+            <!-- Page 1: 标准件库 (Standard Parts) - 50/50 split layout -->
+            <Grid x:Name="PageParts">
+                <Grid.RowDefinitions>
+                    <!-- Top half: Tree + Search -->
+                    <RowDefinition Height="*"/>
+                    <!-- Bottom half: Part Detail -->
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Top: Search + TreeView -->
+                <StackPanel Grid.Row="0" Margin="8,8,8,0">
+                    <!-- Tree header with add category button -->
+                    <Grid Margin="0,0,0,4">
+                        <TextBlock Text="零件分类" FontSize="11" FontWeight="Bold" Foreground="#555555"
+                                   VerticalAlignment="Center"/>
+                        <Button x:Name="AddCategoryBtn" HorizontalAlignment="Right"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,0"
+                                Click="AddCategoryBtn_Click" ToolTip="添加自定义分类">
+                            <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                                       Foreground="#0078D7"/>
+                        </Button>
+                    </Grid>
                     <!-- Search bar -->
-                    <Border Background="White" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="2" Margin="0,0,0,8">
+                    <Border Background="White" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="2" Margin="0,0,0,4">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -151,88 +178,99 @@
                             <TextBox x:Name="PartsSearch" BorderThickness="0" Padding="8,5" FontSize="11"
                                      Foreground="#999999" Background="Transparent"
                                      GotFocus="PartsSearch_GotFocus" LostFocus="PartsSearch_LostFocus"
-                                     Text="搜索零件..." KeyDown="PartsSearch_KeyDown"/>
+                                     Text="搜索零件..." KeyDown="PartsSearch_KeyDown"
+                                     TextChanged="PartsSearch_TextChanged"/>
                             <TextBlock Grid.Column="1" Text="&#xE721;" FontFamily="Segoe MDL2 Assets"
                                        Foreground="#999999" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
                         </Grid>
                     </Border>
 
-                    <!-- 3-level TreeView (templates set in code-behind) -->
+                    <!-- 3-level TreeView -->
                     <TreeView x:Name="PartsTree" Background="White" Foreground="#333333"
-                              BorderBrush="#E0E0E0" BorderThickness="1" MaxHeight="250"
-                              Padding="2" FontSize="12" Margin="0,0,0,0"
-                              TreeViewItem.Expanded="PartsTree_Expanded"/>
-
-                    <!-- Part Detail Card -->
-                    <Border x:Name="PartDetailBorder" Background="White" BorderBrush="#E0E0E0"
-                            BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,8,0,0"
-                            Visibility="Collapsed">
-                        <StackPanel>
-                            <TextBlock x:Name="PartName" FontSize="13" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,4"/>
-                            <Border Background="#E6F0FA" CornerRadius="2" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,6">
-                                <TextBlock x:Name="PartStandard" FontSize="10" Foreground="#0078D7"/>
-                            </Border>
-                            <TextBlock x:Name="PartDesc" FontSize="11" Foreground="#777777" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                            <!-- Specs Table -->
-                            <ItemsControl x:Name="PartSpecs" Margin="0,0,0,8">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,1">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Key}" FontSize="10" Foreground="#888888"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="10" Foreground="#333333" FontWeight="Medium"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <!-- 3D Schematic Preview -->
-                            <views:PartPreviewView x:Name="PartPreview" Margin="0,0,0,8"/>
-
-                            <!-- Parametric editing panel (shown for geometric parts) -->
-                            <Border x:Name="ParamEditPanel" Background="#F8F8F8" BorderBrush="#D0D0D0"
-                                    BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,8"
-                                    Visibility="Collapsed">
-                                <StackPanel>
-                                    <TextBlock Text="参数设置（可修改）" FontSize="11" FontWeight="Bold"
-                                               Foreground="#333333" Margin="0,0,0,6"/>
-                                    <ItemsControl x:Name="PartParamInputs">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Grid Margin="0,0,0,4">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="80"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock VerticalAlignment="Center" FontSize="10">
-                                                        <Run Text="{Binding Label, Mode=OneWay}" Foreground="#444444"/>
-                                                        <Run Text=" [" Foreground="#AAAAAA" FontSize="9"/>
-                                                        <Run Text="{Binding Unit, Mode=OneWay}" Foreground="#AAAAAA" FontSize="9"/>
-                                                        <Run Text="]" Foreground="#AAAAAA" FontSize="9"/>
-                                                    </TextBlock>
-                                                    <TextBox Grid.Column="1" Text="{Binding Value}"
-                                                             Style="{StaticResource InputBox}" FontSize="10" Padding="4,3"/>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Generate button for parametric parts -->
-                            <Button x:Name="GeneratePartBtn" Content="生成模型" Click="GeneratePartBtn_Click"
-                                    Style="{StaticResource PrimaryBtn}" Padding="0,7" Visibility="Collapsed"/>
-                            <TextBlock x:Name="GenerateResultText" FontSize="10" Margin="0,6,0,0"
-                                       TextWrapping="Wrap" Visibility="Collapsed"/>
-
-                            <Button x:Name="InsertBtn" Content="插入到 SolidWorks" Click="InsertBtn_Click"
-                                    Style="{StaticResource PrimaryBtn}" Padding="0,7"/>
-                        </StackPanel>
-                    </Border>
+                              BorderBrush="#E0E0E0" BorderThickness="1"
+                              Padding="2" FontSize="12"
+                              TreeViewItem.Expanded="PartsTree_Expanded"
+                              TreeViewItem.ContextMenuOpening="PartsTree_ContextMenuOpening"/>
                 </StackPanel>
-            </ScrollViewer>
+
+                <!-- Bottom: Part Detail (scrollable) -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="8,4,8,8">
+                    <StackPanel>
+                        <!-- Empty state message -->
+                        <TextBlock x:Name="PartDetailEmpty" Text="请从上方选择一个零件"
+                                   FontSize="11" Foreground="#999999" HorizontalAlignment="Center" Margin="0,20,0,0"/>
+
+                        <!-- Part Detail Card -->
+                        <Border x:Name="PartDetailBorder" Background="White" BorderBrush="#E0E0E0"
+                                BorderThickness="1" CornerRadius="2" Padding="10"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="PartName" FontSize="13" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,4"/>
+                                <Border Background="#E6F0FA" CornerRadius="2" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,6">
+                                    <TextBlock x:Name="PartStandard" FontSize="10" Foreground="#0078D7"/>
+                                </Border>
+                                <TextBlock x:Name="PartDesc" FontSize="11" Foreground="#777777" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                                <!-- Specs Table -->
+                                <ItemsControl x:Name="PartSpecs" Margin="0,0,0,8">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Key}" FontSize="10" Foreground="#888888"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="10" Foreground="#333333" FontWeight="Medium"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- 3D Schematic Preview -->
+                                <views:PartPreviewView x:Name="PartPreview" Margin="0,0,0,8"/>
+
+                                <!-- Parametric editing panel (shown for geometric parts) -->
+                                <Border x:Name="ParamEditPanel" Background="#F8F8F8" BorderBrush="#D0D0D0"
+                                        BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,8"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <TextBlock Text="参数设置（可修改）" FontSize="11" FontWeight="Bold"
+                                                   Foreground="#333333" Margin="0,0,0,6"/>
+                                        <ItemsControl x:Name="PartParamInputs">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="80"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock VerticalAlignment="Center" FontSize="10">
+                                                            <Run Text="{Binding Label, Mode=OneWay}" Foreground="#444444"/>
+                                                            <Run Text=" [" Foreground="#AAAAAA" FontSize="9"/>
+                                                            <Run Text="{Binding Unit, Mode=OneWay}" Foreground="#AAAAAA" FontSize="9"/>
+                                                            <Run Text="]" Foreground="#AAAAAA" FontSize="9"/>
+                                                        </TextBlock>
+                                                        <TextBox Grid.Column="1" Text="{Binding Value}"
+                                                                 Style="{StaticResource InputBox}" FontSize="10" Padding="4,3"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Generate button for parametric parts -->
+                                <Button x:Name="GeneratePartBtn" Content="生成模型" Click="GeneratePartBtn_Click"
+                                        Style="{StaticResource PrimaryBtn}" Padding="0,7" Visibility="Collapsed"/>
+                                <TextBlock x:Name="GenerateResultText" FontSize="10" Margin="0,6,0,0"
+                                           TextWrapping="Wrap" Visibility="Collapsed"/>
+
+                                <Button x:Name="InsertBtn" Content="插入到 SolidWorks" Click="InsertBtn_Click"
+                                        Style="{StaticResource PrimaryBtn}" Padding="0,7"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
 
             <!-- Page 2: 自定义库 (Custom Library) -->
             <ScrollViewer x:Name="PageCustom" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
@@ -474,6 +512,69 @@
                     </Border>
                 </StackPanel>
             </ScrollViewer>
+
+            <!-- Page 6: 帮助手册 (Help) -->
+            <ScrollViewer x:Name="PageHelp" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                <StackPanel Margin="8">
+                    <TextBlock Text="帮助手册" FontSize="14" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,10"/>
+
+                    <!-- 快速入门 -->
+                    <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="&#xE721; 快速入门" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" LineHeight="18">
+                                欢迎使用 SW AI Plugin！本插件提供标准件库浏览、参数化建模和 AI 辅助设计功能。
+                            </TextBlock>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" LineHeight="18" Margin="0,4,0,0">
+                                1. 在"标准件库"中浏览和搜索标准零件&#x0a;
+                                2. 选中零件后可查看规格、修改参数并生成模型&#x0a;
+                                3. 使用"智能助手"输入自然语言描述进行建模
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 参数化建模 -->
+                    <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="&#xE950; 参数化建模" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" LineHeight="18">
+                                选择模板类型后，输入各参数值，点击"生成模型"即可在 SolidWorks 中自动创建零件。
+                                支持的模板包括：法兰、阶梯轴、连接板、支架、轴承座、六角螺栓、六角螺母、平垫圈、圆柱销等。
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 标准件库 -->
+                    <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="&#xE8F1; 标准件库" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" LineHeight="18">
+                                标准件库包含常用紧固件、轴承等标准零件。支持搜索零件名称或编号。
+                                点击 "+" 按钮可添加自定义分类。自定义分类支持右键重命名和删除。
+                                参数化零件可直接修改尺寸后生成模型；外部零件需指定模型库路径后插入。
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 常见问题 -->
+                    <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="&#xE897; 常见问题" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,6"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" LineHeight="18">
+                                Q: 如何连接后端服务？&#x0a;
+                                A: 在"系统设置"中配置后端服务地址，确保服务已启动。&#x0a;&#x0a;
+                                Q: 模型生成失败怎么办？&#x0a;
+                                A: 请检查 SolidWorks 是否已打开并处于活动状态，以及参数值是否合理。&#x0a;&#x0a;
+                                Q: 如何添加自定义零件？&#x0a;
+                                A: 切换到"自定义库"标签页，点击"添加零件"或"添加模板"。
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="内容完善中..." FontSize="10" Foreground="#AAAAAA"
+                               HorizontalAlignment="Center" Margin="0,8,0,8"/>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
         <!-- Footer Status Bar -->
@@ -490,12 +591,12 @@
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock x:Name="FooterVersion" Text="v1.0.0" FontSize="9" Foreground="#AAAAAA"
                                        VerticalAlignment="Center" Cursor="Hand" MouseDown="FooterVersion_MouseDown"/>
-                            <TextBlock Text="  │  " FontSize="9" Foreground="#DDDDDD" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusAI" Text="AI ✓" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
+                            <TextBlock Text="  |  " FontSize="9" Foreground="#DDDDDD" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusAI" Text="AI OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
                             <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusParts" Text="标准件 ✓" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusParts" Text="标准件 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
                             <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusLib" Text="模型库 ✓" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusLib" Text="模型库 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button x:Name="FooterSettingsBtn" HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
@@ -509,12 +610,12 @@
                             <TextBlock x:Name="UpdateVersionText" Text="" FontSize="9" Foreground="#C62828" FontWeight="Bold" VerticalAlignment="Center"/>
                             <TextBlock x:Name="UpdateActionLink" Text=" 点击更新" FontSize="9" Foreground="#0078D7" Cursor="Hand"
                                        TextDecorations="Underline" VerticalAlignment="Center" MouseDown="UpdateActionLink_MouseDown"/>
-                            <TextBlock Text="  │  " FontSize="9" Foreground="#DDDDDD" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusAI2" Text="AI ✓" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
+                            <TextBlock Text="  |  " FontSize="9" Foreground="#DDDDDD" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusAI2" Text="AI OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
                             <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusParts2" Text="标准件 ✓" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusParts2" Text="标准件 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
                             <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusLib2" Text="模型库 ✓" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="StatusLib2" Text="模型库 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button x:Name="FooterSettingsBtn2" HorizontalAlignment="Right" VerticalAlignment="Center"
                                 Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
@@ -537,6 +638,34 @@
                     </StackPanel>
                 </StackPanel>
             </Grid>
+        </Border>
+
+        <!-- Version Info Popup (floating above content) -->
+        <Border x:Name="VersionPopup" Grid.Row="2" Background="White"
+                BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4"
+                Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Visibility="Collapsed" Margin="30,0">
+            <StackPanel Width="240">
+                <TextBlock Text="SW AI Plugin" FontSize="16" FontWeight="Bold" Foreground="#0078D7"
+                           HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                <TextBlock x:Name="VersionPopupVersion" Text="v0.1.0" FontSize="12" Foreground="#666666"
+                           HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                <Separator Margin="0,0,0,8"/>
+                <TextBlock FontSize="11" Foreground="#444444" HorizontalAlignment="Center" Margin="0,0,0,4">
+                    <Run Text="GitHub: "/>
+                    <Hyperlink NavigateUri="https://github.com/yelan-131/sw-ai-plugin"
+                               RequestNavigate="GitHubLink_RequestNavigate">
+                        sw-ai-plugin
+                    </Hyperlink>
+                </TextBlock>
+                <Separator Margin="0,8,0,8"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button x:Name="VersionCheckUpdateBtn" Content="检查更新" Click="VersionCheckUpdateBtn_Click"
+                            Style="{StaticResource PrimaryBtn}" Padding="14,4" Margin="0,0,8,0"/>
+                    <Button x:Name="VersionCloseBtn" Content="关闭" Click="VersionCloseBtn_Click"
+                            Style="{StaticResource SecondaryBtn}" Padding="14,4"/>
+                </StackPanel>
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>
