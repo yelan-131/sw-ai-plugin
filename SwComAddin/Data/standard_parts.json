@@ -1,0 +1,1359 @@
+{
+  "categories": [
+    {
+      "name": "紧固件",
+      "icon": "bolt",
+      "subcategories": [
+        {
+          "name": "六角头螺栓",
+          "parts": [
+            {
+              "id": "hex_bolt_m4",
+              "name": "六角头螺栓 M4",
+              "standard": "GB/T 5782",
+              "geometric": true,
+              "feature_template": "hex_bolt",
+              "specs": {
+                "d": 4,
+                "p": 0.7,
+                "s": 7,
+                "k": 2.8,
+                "ds": 4,
+                "dp": 4,
+                "r": 0.2,
+                "e": 7.66,
+                "dw": 5.9,
+                "lg_min": 12,
+                "l_options": [20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100],
+                "l_default": 40
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准六角头螺栓，M4螺纹，GB/T 5782"
+            },
+            {
+              "id": "hex_bolt_m6",
+              "name": "六角头螺栓 M6",
+              "standard": "GB/T 5782",
+              "geometric": true,
+              "feature_template": "hex_bolt",
+              "specs": {
+                "d": 6,
+                "p": 1.0,
+                "s": 10,
+                "k": 4.0,
+                "ds": 6,
+                "dp": 6,
+                "r": 0.25,
+                "e": 10.89,
+                "dw": 8.9,
+                "lg_min": 18,
+                "l_options": [20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120],
+                "l_default": 55
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准六角头螺栓，M6螺纹，GB/T 5782"
+            },
+            {
+              "id": "hex_bolt_m8",
+              "name": "六角头螺栓 M8",
+              "standard": "GB/T 5782",
+              "geometric": true,
+              "feature_template": "hex_bolt",
+              "specs": {
+                "d": 8,
+                "p": 1.25,
+                "s": 13,
+                "k": 5.3,
+                "ds": 8,
+                "dp": 8,
+                "r": 0.4,
+                "e": 14.20,
+                "dw": 11.6,
+                "lg_min": 22,
+                "l_options": [25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120],
+                "l_default": 60
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准六角头螺栓，M8螺纹，GB/T 5782"
+            },
+            {
+              "id": "hex_bolt_m10",
+              "name": "六角头螺栓 M10",
+              "standard": "GB/T 5782",
+              "geometric": true,
+              "feature_template": "hex_bolt",
+              "specs": {
+                "d": 10,
+                "p": 1.5,
+                "s": 16,
+                "k": 6.4,
+                "ds": 10,
+                "dp": 10,
+                "r": 0.4,
+                "e": 17.59,
+                "dw": 14.6,
+                "lg_min": 26,
+                "l_options": [30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150],
+                "l_default": 70
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准六角头螺栓，M10螺纹，GB/T 5782"
+            },
+            {
+              "id": "hex_bolt_m12",
+              "name": "六角头螺栓 M12",
+              "standard": "GB/T 5782",
+              "geometric": true,
+              "feature_template": "hex_bolt",
+              "specs": {
+                "d": 12,
+                "p": 1.75,
+                "s": 18,
+                "k": 7.5,
+                "ds": 12,
+                "dp": 12,
+                "r": 0.6,
+                "e": 19.85,
+                "dw": 16.6,
+                "lg_min": 30,
+                "l_options": [40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180],
+                "l_default": 80
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准六角头螺栓，M12螺纹，GB/T 5782"
+            },
+            {
+              "id": "hex_bolt_m16",
+              "name": "六角头螺栓 M16",
+              "standard": "GB/T 5782",
+              "geometric": true,
+              "feature_template": "hex_bolt",
+              "specs": {
+                "d": 16,
+                "p": 2.0,
+                "s": 24,
+                "k": 10,
+                "ds": 16,
+                "dp": 16,
+                "r": 0.6,
+                "e": 26.17,
+                "dw": 22.5,
+                "lg_min": 38,
+                "l_options": [50, 55, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200],
+                "l_default": 100
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准六角头螺栓，M16螺纹，GB/T 5782"
+            },
+            {
+              "id": "hex_socket_screw_m6",
+              "name": "内六角螺钉 M6",
+              "standard": "GB/T 70.1",
+              "geometric": true,
+              "feature_template": "socket_head_cap_screw",
+              "specs": {
+                "d": 6,
+                "p": 1.0,
+                "dk": 10,
+                "k": 6,
+                "hex": 5,
+                "t": 3.3,
+                "r": 0.5,
+                "ds": 6,
+                "dp": 6,
+                "s_flat": 0.6,
+                "l_options": [10, 12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80],
+                "l_default": 30
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "内六角圆柱头螺钉，M6螺纹，GB/T 70.1"
+            },
+            {
+              "id": "hex_socket_screw_m8",
+              "name": "内六角螺钉 M8",
+              "standard": "GB/T 70.1",
+              "geometric": true,
+              "feature_template": "socket_head_cap_screw",
+              "specs": {
+                "d": 8,
+                "p": 1.25,
+                "dk": 13,
+                "k": 8,
+                "hex": 6,
+                "t": 4.4,
+                "r": 0.6,
+                "ds": 8,
+                "dp": 8,
+                "s_flat": 0.7,
+                "l_options": [12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100],
+                "l_default": 40
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "内六角圆柱头螺钉，M8螺纹，GB/T 70.1"
+            }
+          ]
+        },
+        {
+          "name": "螺母",
+          "parts": [
+            {
+              "id": "hex_nut_m6",
+              "name": "六角螺母 M6",
+              "standard": "GB/T 6170",
+              "geometric": true,
+              "feature_template": "hex_nut",
+              "specs": {
+                "d": 6,
+                "p": 1.0,
+                "s": 10,
+                "m": 5.2,
+                "e": 10.89,
+                "dw": 8.9,
+                "c": 0.5
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准I型六角螺母，M6螺纹，GB/T 6170"
+            }
+          ]
+        },
+        {
+          "name": "垫圈",
+          "parts": [
+            {
+              "id": "flat_washer_m6",
+              "name": "平垫圈 M6",
+              "standard": "GB/T 97.1",
+              "geometric": true,
+              "feature_template": "flat_washer",
+              "specs": {
+                "d1": 6.4,
+                "d2": 12,
+                "h": 1.6
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准平垫圈，M6螺栓用，GB/T 97.1"
+            },
+            {
+              "id": "spring_washer_m6",
+              "name": "弹簧垫圈 M6",
+              "standard": "GB/T 93",
+              "geometric": true,
+              "feature_template": "spring_washer",
+              "specs": {
+                "d1": 6.1,
+                "d2": 10.2,
+                "s": 1.6,
+                "b": 2.0
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "标准弹簧垫圈，M6螺栓防松用，GB/T 93"
+            }
+          ]
+        },
+        {
+          "name": "销",
+          "parts": [
+            {
+              "id": "dowel_pin_6x30",
+              "name": "圆柱销 6x30",
+              "standard": "GB/T 119.1",
+              "geometric": true,
+              "feature_template": "dowel_pin",
+              "specs": {
+                "d": 6,
+                "l": 30,
+                "c": 2.0,
+                "tolerance": "m6"
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "圆柱定位销，直径6mm，长度30mm，GB/T 119.1"
+            }
+          ]
+        }
+      ],
+      "parts": []
+    },
+    {
+      "name": "轴承",
+      "icon": "circle",
+      "subcategories": [
+        {
+          "name": "深沟球轴承",
+          "parts": [
+            {
+              "id": "deep_groove_6000",
+              "name": "深沟球轴承 6000",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 10,
+                "D": 26,
+                "B": 8,
+                "r_min": 0.3,
+                "d2": 16.7,
+                "D2": 21.3,
+                "ball_dia": 3.175
+              },
+              "performance": {
+                "dynamic_load": 4.2,
+                "static_load": 1.5,
+                "fatigue_load": 0.08,
+                "reference_speed": 32000,
+                "limit_speed": 38000
+              },
+              "file_path": "",
+              "description": "微型深沟球轴承，内径10mm，外径26mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6001",
+              "name": "深沟球轴承 6001",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 12,
+                "D": 28,
+                "B": 8,
+                "r_min": 0.3,
+                "d2": 18.7,
+                "D2": 23.3,
+                "ball_dia": 3.175
+              },
+              "performance": {
+                "dynamic_load": 5.1,
+                "static_load": 1.9,
+                "fatigue_load": 0.1,
+                "reference_speed": 30000,
+                "limit_speed": 36000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径12mm，外径28mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6002",
+              "name": "深沟球轴承 6002",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 15,
+                "D": 32,
+                "B": 9,
+                "r_min": 0.3,
+                "d2": 21.7,
+                "D2": 27.3,
+                "ball_dia": 3.969
+              },
+              "performance": {
+                "dynamic_load": 5.6,
+                "static_load": 2.4,
+                "fatigue_load": 0.12,
+                "reference_speed": 26000,
+                "limit_speed": 32000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径15mm，外径32mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6201",
+              "name": "深沟球轴承 6201",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 12,
+                "D": 32,
+                "B": 10,
+                "r_min": 0.6,
+                "d2": 19.7,
+                "D2": 27.3,
+                "ball_dia": 4.762
+              },
+              "performance": {
+                "dynamic_load": 6.9,
+                "static_load": 2.6,
+                "fatigue_load": 0.14,
+                "reference_speed": 26000,
+                "limit_speed": 32000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径12mm，外径32mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6202",
+              "name": "深沟球轴承 6202",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 15,
+                "D": 35,
+                "B": 11,
+                "r_min": 0.6,
+                "d2": 22.7,
+                "D2": 30.3,
+                "ball_dia": 4.762
+              },
+              "performance": {
+                "dynamic_load": 7.8,
+                "static_load": 3.2,
+                "fatigue_load": 0.16,
+                "reference_speed": 23000,
+                "limit_speed": 28000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径15mm，外径35mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6203",
+              "name": "深沟球轴承 6203",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 17,
+                "D": 40,
+                "B": 12,
+                "r_min": 0.6,
+                "d2": 25.7,
+                "D2": 34.3,
+                "ball_dia": 5.556
+              },
+              "performance": {
+                "dynamic_load": 9.5,
+                "static_load": 4.2,
+                "fatigue_load": 0.2,
+                "reference_speed": 20000,
+                "limit_speed": 24000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径17mm，外径40mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6204",
+              "name": "深沟球轴承 6204",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 20,
+                "D": 47,
+                "B": 14,
+                "r_min": 1.0,
+                "d2": 29.7,
+                "D2": 40.3,
+                "ball_dia": 7.144
+              },
+              "performance": {
+                "dynamic_load": 12.8,
+                "static_load": 6.65,
+                "fatigue_load": 0.28,
+                "reference_speed": 17000,
+                "limit_speed": 20000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径20mm，外径47mm，GB/T 276"
+            },
+            {
+              "id": "deep_groove_6305",
+              "name": "深沟球轴承 6305",
+              "standard": "GB/T 276",
+              "geometric": true,
+              "feature_template": "deep_groove_ball_bearing",
+              "specs": {
+                "d": 25,
+                "D": 62,
+                "B": 17,
+                "r_min": 1.1,
+                "d2": 37.0,
+                "D2": 53.0,
+                "ball_dia": 9.525
+              },
+              "performance": {
+                "dynamic_load": 22.2,
+                "static_load": 11.5,
+                "fatigue_load": 0.48,
+                "reference_speed": 13000,
+                "limit_speed": 16000
+              },
+              "file_path": "",
+              "description": "深沟球轴承，内径25mm，外径62mm，GB/T 276"
+            }
+          ]
+        },
+        {
+          "name": "推力轴承",
+          "parts": [
+            {
+              "id": "thrust_bearing_51100",
+              "name": "推力球轴承 51100",
+              "standard": "GB/T 301",
+              "geometric": true,
+              "feature_template": "thrust_ball_bearing",
+              "specs": {
+                "d": 10,
+                "D": 24,
+                "T": 9,
+                "d1": 11,
+                "D1": 24,
+                "r_min": 0.3,
+                "ball_dia": 3.175
+              },
+              "performance": {
+                "dynamic_load": 10,
+                "static_load": 14,
+                "fatigue_load": 0.42,
+                "reference_speed": 6000,
+                "limit_speed": 8500
+              },
+              "file_path": "",
+              "description": "推力球轴承，内径10mm，外径24mm，承受轴向载荷，GB/T 301"
+            }
+          ]
+        },
+        {
+          "name": "直线轴承",
+          "parts": [
+            {
+              "id": "linear_bearing_lm8uu",
+              "name": "直线轴承 LM8UU",
+              "standard": "ISO 10285",
+              "geometric": true,
+              "feature_template": "linear_ball_bearing",
+              "specs": {
+                "d": 8,
+                "D": 15,
+                "L": 24,
+                "d1": 10.5,
+                "groove_count": 4,
+                "groove_width": 1.2
+              },
+              "performance": {
+                "dynamic_load": 0.49,
+                "static_load": 0.6,
+                "max_speed": 200
+              },
+              "file_path": "",
+              "description": "直线运动轴承，内径8mm，配合8mm光轴使用，ISO 10285"
+            }
+          ]
+        }
+      ],
+      "parts": []
+    },
+    {
+      "name": "电机",
+      "icon": "box",
+      "subcategories": [
+        {
+          "name": "步进电机",
+          "parts": [
+            {
+              "id": "stepper_nema17_40mm",
+              "name": "步进电机 NEMA 17 (40mm)",
+              "standard": "NEMA 17",
+              "geometric": true,
+              "feature_template": "stepper_motor",
+              "specs": {
+                "face_width": 42.3,
+                "face_height": 42.3,
+                "body_length": 40,
+                "shaft_diameter": 5,
+                "shaft_length": 24,
+                "mounting_hole_spacing": 31,
+                "mounting_hole_diameter": 3.5,
+                "pilot_diameter": 22,
+                "pilot_depth": 2,
+                "cable_exit_side": "rear"
+              },
+              "performance": {
+                "holding_torque": 0.4,
+                "rated_current": 1.7,
+                "steps_per_rev": 200,
+                "phase_resistance": 1.5
+              },
+              "file_path": "",
+              "description": "NEMA 17混合式步进电机，40mm机长，扭矩0.4N*m"
+            },
+            {
+              "id": "stepper_nema17_48mm",
+              "name": "步进电机 NEMA 17 (48mm)",
+              "standard": "NEMA 17",
+              "geometric": true,
+              "feature_template": "stepper_motor",
+              "specs": {
+                "face_width": 42.3,
+                "face_height": 42.3,
+                "body_length": 48,
+                "shaft_diameter": 5,
+                "shaft_length": 24,
+                "mounting_hole_spacing": 31,
+                "mounting_hole_diameter": 3.5,
+                "pilot_diameter": 22,
+                "pilot_depth": 2,
+                "cable_exit_side": "rear"
+              },
+              "performance": {
+                "holding_torque": 0.54,
+                "rated_current": 2.0,
+                "steps_per_rev": 200,
+                "phase_resistance": 1.2
+              },
+              "file_path": "",
+              "description": "NEMA 17混合式步进电机，48mm机长，扭矩0.54N*m"
+            },
+            {
+              "id": "stepper_nema23",
+              "name": "步进电机 NEMA 23",
+              "standard": "NEMA 23",
+              "geometric": true,
+              "feature_template": "stepper_motor",
+              "specs": {
+                "face_width": 56.4,
+                "face_height": 56.4,
+                "body_length": 76,
+                "shaft_diameter": 6.35,
+                "shaft_length": 21,
+                "mounting_hole_spacing": 47.14,
+                "mounting_hole_diameter": 4.5,
+                "pilot_diameter": 38.1,
+                "pilot_depth": 2.5,
+                "cable_exit_side": "rear"
+              },
+              "performance": {
+                "holding_torque": 1.27,
+                "rated_current": 2.8,
+                "steps_per_rev": 200,
+                "phase_resistance": 0.9
+              },
+              "file_path": "",
+              "description": "NEMA 23混合式步进电机，76mm机长，扭矩1.27N*m"
+            }
+          ]
+        },
+        {
+          "name": "伺服电机",
+          "parts": [
+            {
+              "id": "servo_60w",
+              "name": "伺服电机 60W",
+              "standard": "IEC 60034",
+              "geometric": true,
+              "feature_template": "servo_motor",
+              "specs": {
+                "flange_width": 40,
+                "flange_height": 40,
+                "body_length": 85,
+                "body_diameter": 38,
+                "shaft_diameter": 8,
+                "shaft_length": 21,
+                "mounting_hole_spacing": 32,
+                "mounting_hole_diameter": 3.5,
+                "pilot_diameter": 30,
+                "pilot_depth": 2.5,
+                "key_width": 3,
+                "key_height": 3
+              },
+              "performance": {
+                "rated_power": 60,
+                "rated_torque": 0.191,
+                "rated_speed": 3000,
+                "rated_current": 0.58
+              },
+              "file_path": "",
+              "description": "60W交流伺服电机，额定扭矩0.191N*m，3000rpm"
+            },
+            {
+              "id": "servo_200w",
+              "name": "伺服电机 200W",
+              "standard": "IEC 60034",
+              "geometric": true,
+              "feature_template": "servo_motor",
+              "specs": {
+                "flange_width": 60,
+                "flange_height": 60,
+                "body_length": 112,
+                "body_diameter": 55,
+                "shaft_diameter": 11,
+                "shaft_length": 26,
+                "mounting_hole_spacing": 50,
+                "mounting_hole_diameter": 4.5,
+                "pilot_diameter": 45,
+                "pilot_depth": 3,
+                "key_width": 4,
+                "key_height": 4
+              },
+              "performance": {
+                "rated_power": 200,
+                "rated_torque": 0.637,
+                "rated_speed": 3000,
+                "rated_current": 1.8
+              },
+              "file_path": "",
+              "description": "200W交流伺服电机，额定扭矩0.637N*m，3000rpm"
+            },
+            {
+              "id": "servo_400w",
+              "name": "伺服电机 400W",
+              "standard": "IEC 60034",
+              "geometric": true,
+              "feature_template": "servo_motor",
+              "specs": {
+                "flange_width": 80,
+                "flange_height": 80,
+                "body_length": 130,
+                "body_diameter": 70,
+                "shaft_diameter": 14,
+                "shaft_length": 30,
+                "mounting_hole_spacing": 63,
+                "mounting_hole_diameter": 5.5,
+                "pilot_diameter": 60,
+                "pilot_depth": 3,
+                "key_width": 5,
+                "key_height": 5
+              },
+              "performance": {
+                "rated_power": 400,
+                "rated_torque": 1.27,
+                "rated_speed": 3000,
+                "rated_current": 2.9
+              },
+              "file_path": "",
+              "description": "400W交流伺服电机，额定扭矩1.27N*m，3000rpm"
+            },
+            {
+              "id": "servo_750w",
+              "name": "伺服电机 750W",
+              "standard": "IEC 60034",
+              "geometric": true,
+              "feature_template": "servo_motor",
+              "specs": {
+                "flange_width": 90,
+                "flange_height": 90,
+                "body_length": 160,
+                "body_diameter": 80,
+                "shaft_diameter": 19,
+                "shaft_length": 40,
+                "mounting_hole_spacing": 73,
+                "mounting_hole_diameter": 6.6,
+                "pilot_diameter": 70,
+                "pilot_depth": 3.5,
+                "key_width": 6,
+                "key_height": 6
+              },
+              "performance": {
+                "rated_power": 750,
+                "rated_torque": 2.39,
+                "rated_speed": 3000,
+                "rated_current": 5.6
+              },
+              "file_path": "",
+              "description": "750W交流伺服电机，额定扭矩2.39N*m，3000rpm"
+            }
+          ]
+        },
+        {
+          "name": "交流电机",
+          "parts": [
+            {
+              "id": "ac_motor_90w",
+              "name": "普通电机 90W",
+              "standard": "IEC 60034",
+              "geometric": true,
+              "feature_template": "ac_induction_motor",
+              "specs": {
+                "flange_width": 65,
+                "flange_height": 65,
+                "body_length": 120,
+                "body_diameter": 56,
+                "shaft_diameter": 9,
+                "shaft_length": 20,
+                "mounting_hole_spacing": 50,
+                "mounting_hole_diameter": 4.5,
+                "pilot_diameter": 45,
+                "pilot_depth": 2.5,
+                "key_width": 3,
+                "key_height": 3
+              },
+              "performance": {
+                "rated_power": 90,
+                "rated_torque": 0.29,
+                "rated_speed": 3000,
+                "rated_current": 0.7
+              },
+              "file_path": "",
+              "description": "90W交流感应电机，额定扭矩0.29N*m，3000rpm"
+            },
+            {
+              "id": "ac_motor_120w",
+              "name": "普通电机 120W",
+              "standard": "IEC 60034",
+              "geometric": true,
+              "feature_template": "ac_induction_motor",
+              "specs": {
+                "flange_width": 75,
+                "flange_height": 75,
+                "body_length": 140,
+                "body_diameter": 65,
+                "shaft_diameter": 11,
+                "shaft_length": 24,
+                "mounting_hole_spacing": 60,
+                "mounting_hole_diameter": 5.5,
+                "pilot_diameter": 50,
+                "pilot_depth": 3,
+                "key_width": 4,
+                "key_height": 4
+              },
+              "performance": {
+                "rated_power": 120,
+                "rated_torque": 0.38,
+                "rated_speed": 3000,
+                "rated_current": 0.9
+              },
+              "file_path": "",
+              "description": "120W交流感应电机，额定扭矩0.38N*m，3000rpm"
+            }
+          ]
+        }
+      ],
+      "parts": []
+    },
+    {
+      "name": "气缸",
+      "icon": "cylinder",
+      "subcategories": [
+        {
+          "name": "迷你气缸",
+          "parts": [
+            {
+              "id": "cylinder_cj2b16_25",
+              "name": "SMC气缸 CJ2B16x25",
+              "standard": "SMC",
+              "geometric": true,
+              "feature_template": "pneumatic_cylinder",
+              "specs": {
+                "bore": 16,
+                "stroke": 25,
+                "rod_diameter": 6,
+                "overall_length": 73.5,
+                "mounting_length": 48.5,
+                "rod_end_length": 12,
+                "port_thread": "M5",
+                "end_cap_diameter": 22,
+                "end_cap_height": 14,
+                "mounting_thread": "M5",
+                "mounting_thread_depth": 6
+              },
+              "performance": {
+                "operating_pressure": 0.7,
+                "theoretical_force": 120.6
+              },
+              "file_path": "",
+              "description": "SMC CJ2B16型薄型气缸，缸径16mm，行程25mm"
+            },
+            {
+              "id": "cylinder_cj2b16_50",
+              "name": "SMC气缸 CJ2B16x50",
+              "standard": "SMC",
+              "geometric": true,
+              "feature_template": "pneumatic_cylinder",
+              "specs": {
+                "bore": 16,
+                "stroke": 50,
+                "rod_diameter": 6,
+                "overall_length": 98.5,
+                "mounting_length": 73.5,
+                "rod_end_length": 12,
+                "port_thread": "M5",
+                "end_cap_diameter": 22,
+                "end_cap_height": 14,
+                "mounting_thread": "M5",
+                "mounting_thread_depth": 6
+              },
+              "performance": {
+                "operating_pressure": 0.7,
+                "theoretical_force": 120.6
+              },
+              "file_path": "",
+              "description": "SMC CJ2B16型薄型气缸，缸径16mm，行程50mm"
+            },
+            {
+              "id": "cylinder_cj2b16_100",
+              "name": "SMC气缸 CJ2B16x100",
+              "standard": "SMC",
+              "geometric": true,
+              "feature_template": "pneumatic_cylinder",
+              "specs": {
+                "bore": 16,
+                "stroke": 100,
+                "rod_diameter": 6,
+                "overall_length": 148.5,
+                "mounting_length": 123.5,
+                "rod_end_length": 12,
+                "port_thread": "M5",
+                "end_cap_diameter": 22,
+                "end_cap_height": 14,
+                "mounting_thread": "M5",
+                "mounting_thread_depth": 6
+              },
+              "performance": {
+                "operating_pressure": 0.7,
+                "theoretical_force": 120.6
+              },
+              "file_path": "",
+              "description": "SMC CJ2B16型薄型气缸，缸径16mm，行程100mm"
+            }
+          ]
+        },
+        {
+          "name": "标准气缸",
+          "parts": [
+            {
+              "id": "cylinder_cm2b20_50",
+              "name": "SMC气缸 CM2B20x50",
+              "standard": "SMC",
+              "geometric": true,
+              "feature_template": "pneumatic_cylinder",
+              "specs": {
+                "bore": 20,
+                "stroke": 50,
+                "rod_diameter": 8,
+                "overall_length": 121,
+                "mounting_length": 82,
+                "rod_end_length": 16,
+                "port_thread": "M5",
+                "end_cap_diameter": 26,
+                "end_cap_height": 17,
+                "mounting_thread": "M6",
+                "mounting_thread_depth": 8,
+                "tube_outer_diameter": 20
+              },
+              "performance": {
+                "operating_pressure": 0.7,
+                "theoretical_force": 188.5
+              },
+              "file_path": "",
+              "description": "SMC CM2B20型紧凑型气缸，缸径20mm，行程50mm"
+            },
+            {
+              "id": "cylinder_cm2b20_100",
+              "name": "SMC气缸 CM2B20x100",
+              "standard": "SMC",
+              "geometric": true,
+              "feature_template": "pneumatic_cylinder",
+              "specs": {
+                "bore": 20,
+                "stroke": 100,
+                "rod_diameter": 8,
+                "overall_length": 171,
+                "mounting_length": 132,
+                "rod_end_length": 16,
+                "port_thread": "M5",
+                "end_cap_diameter": 26,
+                "end_cap_height": 17,
+                "mounting_thread": "M6",
+                "mounting_thread_depth": 8,
+                "tube_outer_diameter": 20
+              },
+              "performance": {
+                "operating_pressure": 0.7,
+                "theoretical_force": 188.5
+              },
+              "file_path": "",
+              "description": "SMC CM2B20型紧凑型气缸，缸径20mm，行程100mm"
+            },
+            {
+              "id": "cylinder_cm2b20_150",
+              "name": "SMC气缸 CM2B20x150",
+              "standard": "SMC",
+              "geometric": true,
+              "feature_template": "pneumatic_cylinder",
+              "specs": {
+                "bore": 20,
+                "stroke": 150,
+                "rod_diameter": 8,
+                "overall_length": 221,
+                "mounting_length": 182,
+                "rod_end_length": 16,
+                "port_thread": "M5",
+                "end_cap_diameter": 26,
+                "end_cap_height": 17,
+                "mounting_thread": "M6",
+                "mounting_thread_depth": 8,
+                "tube_outer_diameter": 20
+              },
+              "performance": {
+                "operating_pressure": 0.7,
+                "theoretical_force": 188.5
+              },
+              "file_path": "",
+              "description": "SMC CM2B20型紧凑型气缸，缸径20mm，行程150mm"
+            }
+          ]
+        }
+      ],
+      "parts": []
+    },
+    {
+      "name": "传感器",
+      "icon": "sensor",
+      "subcategories": [
+        {
+          "name": "光电传感器",
+          "parts": [
+            {
+              "id": "photo_sensor_e3z",
+              "name": "光电传感器 E3Z-D62",
+              "standard": "OMRON",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "type": "diffuse_reflective",
+                "detection_distance": 100,
+                "supply_voltage": "DC 12-24V",
+                "output_type": "NPN",
+                "response_time": 2
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "欧姆龙E3Z-D62光电传感器，检测距离100mm"
+            },
+            {
+              "id": "photo_sensor_e3z_tough",
+              "name": "光电传感器 E3Z-T61",
+              "standard": "OMRON",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "type": "through_beam",
+                "detection_distance": 15000,
+                "supply_voltage": "DC 12-24V",
+                "output_type": "NPN",
+                "response_time": 3
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "欧姆龙E3Z-T61对射光电传感器，检测距离15m"
+            },
+            {
+              "id": "photo_sensor_e3z_retro",
+              "name": "光电传感器 E3Z-R61",
+              "standard": "OMRON",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "type": "retro_reflective",
+                "detection_distance": 2000,
+                "supply_voltage": "DC 12-24V",
+                "output_type": "NPN",
+                "response_time": 2
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "欧姆龙E3Z-R61回归反射光电传感器，检测距离2m"
+            }
+          ]
+        },
+        {
+          "name": "接近传感器",
+          "parts": [
+            {
+              "id": "proximity_sensor_tl_5",
+              "name": "接近传感器 TL-W5MC1",
+              "standard": "OMRON",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "type": "inductive",
+                "detection_distance": 5,
+                "supply_voltage": "DC 12-24V",
+                "output_type": "NPN",
+                "response_time": 1.5
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "欧姆龙TL-W5MC1接近传感器，检测距离5mm"
+            },
+            {
+              "id": "proximity_sensor_tl_8",
+              "name": "接近传感器 TL-W/E5MC2",
+              "standard": "OMRON",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "type": "inductive",
+                "detection_distance": 8,
+                "supply_voltage": "DC 12-24V",
+                "output_type": "NPN",
+                "response_time": 1.5
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "欧姆龙TL-W/E5MC2接近传感器，检测距离8mm"
+            }
+          ]
+        },
+        {
+          "name": "压力传感器",
+          "parts": [
+            {
+              "id": "pressure_sensor_1mpa",
+              "name": "压力传感器 (0-1MPa)",
+              "standard": "IEC 60770",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "pressure_range": "0-1MPa",
+                "output_signal": "4-20mA",
+                "supply_voltage": "DC 24V",
+                "accuracy": 0.5,
+                "response_time": 10
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "工业压力传感器，量程0-1MPa，4-20mA输出"
+            },
+            {
+              "id": "pressure_sensor_10mpa",
+              "name": "压力传感器 (0-10MPa)",
+              "standard": "IEC 60770",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "pressure_range": "0-10MPa",
+                "output_signal": "4-20mA",
+                "supply_voltage": "DC 24V",
+                "accuracy": 0.5,
+                "response_time": 10
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "工业压力传感器，量程0-10MPa，4-20mA输出"
+            }
+          ]
+        },
+        {
+          "name": "温度传感器",
+          "parts": [
+            {
+              "id": "temperature_sensor_pt100",
+              "name": "温度传感器 Pt100",
+              "standard": "IEC 60751",
+              "geometric": false,
+              "feature_template": null,
+              "specs": {
+                "temperature_range": "-50 to 150",
+                "output_signal": "4-20mA",
+                "supply_voltage": "DC 24V",
+                "accuracy": 0.3,
+                "response_time": 5
+              },
+              "performance": {},
+              "file_path": "",
+              "description": "工业温度传感器，Pt100热电阻，量程-50C至150C"
+            }
+          ]
+        }
+      ],
+      "parts": []
+    },
+    {
+      "name": "导轨",
+      "icon": "rail",
+      "subcategories": [
+        {
+          "name": "滚珠导轨",
+          "parts": [
+            {
+              "id": "linear_guide_mgn7h",
+              "name": "直线导轨 MGN7H",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_ball_guide",
+              "specs": {
+                "rail_width": 7,
+                "rail_height": 5,
+                "rail_mounting_hole_spacing": 15,
+                "rail_mounting_hole_diameter": 2.5,
+                "carriage_length": 20,
+                "carriage_width": 12,
+                "carriage_height": 8,
+                "carriage_mounting_hole_spacing": 7,
+                "carriage_mounting_hole_diameter": 2.5
+              },
+              "performance": {
+                "static_load": 0.46,
+                "dynamic_load": 0.35
+              },
+              "file_path": "",
+              "description": "HIWIN MGN7H微型直线导轨，宽度7mm，高度5mm"
+            },
+            {
+              "id": "linear_guide_mgn9h",
+              "name": "直线导轨 MGN9H",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_ball_guide",
+              "specs": {
+                "rail_width": 9,
+                "rail_height": 6,
+                "rail_mounting_hole_spacing": 20,
+                "rail_mounting_hole_diameter": 3.0,
+                "carriage_length": 25,
+                "carriage_width": 15,
+                "carriage_height": 10,
+                "carriage_mounting_hole_spacing": 9,
+                "carriage_mounting_hole_diameter": 3.0
+              },
+              "performance": {
+                "static_load": 0.56,
+                "dynamic_load": 0.42
+              },
+              "file_path": "",
+              "description": "HIWIN MGN9H微型直线导轨，宽度9mm，高度6mm"
+            },
+            {
+              "id": "linear_guide_mgn12h",
+              "name": "直线导轨 MGN12H",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_ball_guide",
+              "specs": {
+                "rail_width": 12,
+                "rail_height": 8,
+                "rail_mounting_hole_spacing": 25,
+                "rail_mounting_hole_diameter": 3.5,
+                "carriage_length": 30,
+                "carriage_width": 20,
+                "carriage_height": 13,
+                "carriage_mounting_hole_spacing": 12,
+                "carriage_mounting_hole_diameter": 3.5
+              },
+              "performance": {
+                "static_load": 0.75,
+                "dynamic_load": 0.56
+              },
+              "file_path": "",
+              "description": "HIWIN MGN12H微型直线导轨，宽度12mm，高度8mm"
+            },
+            {
+              "id": "linear_guide_mgn15h",
+              "name": "直线导轨 MGN15H",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_ball_guide",
+              "specs": {
+                "rail_width": 15,
+                "rail_height": 10,
+                "rail_mounting_hole_spacing": 30,
+                "rail_mounting_hole_diameter": 3.5,
+                "carriage_length": 40,
+                "carriage_width": 26,
+                "carriage_height": 16,
+                "carriage_mounting_hole_spacing": 15,
+                "carriage_mounting_hole_diameter": 3.5
+              },
+              "performance": {
+                "static_load": 1.04,
+                "dynamic_load": 0.82
+              },
+              "file_path": "",
+              "description": "HIWIN MGN15H微型直线导轨，宽度15mm，高度10mm"
+            }
+          ]
+        },
+        {
+          "name": "滚柱导轨",
+          "parts": [
+            {
+              "id": "linear_guide_gh15ca",
+              "name": "直线导轨 GH15CA",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_roller_guide",
+              "specs": {
+                "rail_width": 15,
+                "rail_height": 24,
+                "rail_mounting_hole_spacing": 60,
+                "rail_mounting_hole_diameter": 4.5,
+                "carriage_length": 58.5,
+                "carriage_width": 34,
+                "carriage_height": 28,
+                "carriage_mounting_hole_spacing": 26,
+                "carriage_mounting_hole_diameter": 4.5
+              },
+              "performance": {
+                "static_load": 2.76,
+                "dynamic_load": 2.08
+              },
+              "file_path": "",
+              "description": "HIWIN GH15CA重载型直线导轨，宽度15mm，高度24mm"
+            },
+            {
+              "id": "linear_guide_hgh20ca",
+              "name": "直线导轨 HGH20CA",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_roller_guide",
+              "specs": {
+                "rail_width": 20,
+                "rail_height": 30,
+                "rail_mounting_hole_spacing": 60,
+                "rail_mounting_hole_diameter": 6.0,
+                "carriage_length": 73.5,
+                "carriage_width": 44,
+                "carriage_height": 35,
+                "carriage_mounting_hole_spacing": 32,
+                "carriage_mounting_hole_diameter": 6.0
+              },
+              "performance": {
+                "static_load": 4.22,
+                "dynamic_load": 3.23
+              },
+              "file_path": "",
+              "description": "HIWIN HGH20CA重载型直线导轨，宽度20mm，高度30mm"
+            },
+            {
+              "id": "linear_guide_hgh25ca",
+              "name": "直线导轨 HGH25CA",
+              "standard": "HIWIN",
+              "geometric": true,
+              "feature_template": "linear_roller_guide",
+              "specs": {
+                "rail_width": 25,
+                "rail_height": 40,
+                "rail_mounting_hole_spacing": 60,
+                "rail_mounting_hole_diameter": 7.0,
+                "carriage_length": 83.5,
+                "carriage_width": 52,
+                "carriage_height": 44,
+                "carriage_mounting_hole_spacing": 36,
+                "carriage_mounting_hole_diameter": 7.0
+              },
+              "performance": {
+                "static_load": 6.58,
+                "dynamic_load": 4.93
+              },
+              "file_path": "",
+              "description": "HIWIN HGH25CA重载型直线导轨，宽度25mm，高度40mm"
+            }
+          ]
+        }
+      ],
+      "parts": []
+    }
+  ]
+}

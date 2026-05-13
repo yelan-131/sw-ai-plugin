@@ -1,0 +1,7 @@
+LIBRARY SwNativeShim
+
+EXPORTS
+    DllRegisterServer
+    DllUnregisterServer
+    DllGetClassObject
+    DllCanUnloadNow

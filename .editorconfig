@@ -1,0 +1,5 @@
+root = true
+
+[*.cs]
+# WPF auto-generated InitializeComponent - not a real error
+dotnet_diagnostic.CS0103.severity = none
