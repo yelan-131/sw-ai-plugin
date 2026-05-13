@@ -7,7 +7,7 @@ echo ========================================
 echo.
 
 REM Read version from plugin_config.json
-set VERSION=1.0.0
+set VERSION=0.1.0
 if exist "bin\Debug\net48\plugin_config.json" (
     for /f "tokens=2 delims=:," %%a in ('findstr "version" "bin\Debug\net48\plugin_config.json"') do (
         set "V=%%~a"

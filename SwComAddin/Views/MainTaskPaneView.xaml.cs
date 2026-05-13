@@ -27,7 +27,7 @@ namespace SwComAddin.Views
         private string? _selectedTemplate;
         private string _backendUrl = "http://localhost:8765";
         private string _modelLibPath = "";  // local folder or http://server/models/
-        private string _version = "1.0.0";
+        private string _version = "0.1.0";
         private UpdateService _updateService;
         private string? _pendingUpdateUrl;
         private string? _pendingUpdateVersion;
