@@ -1257,6 +1257,13 @@ namespace SwComAddin.Views
                 var installDir = BaseDir;
                 var batPath = _updateService.PrepareUpdate(zipPath, installDir);
 
+                // Update local version in config before restart
+                if (_pendingUpdateVersion != null)
+                {
+                    _version = _pendingUpdateVersion.TrimStart('v', 'V');
+                    SaveConfig();
+                }
+
                 var result = MessageBox.Show(
                     "更新已下载完成，需要重启 SolidWorks 完成安装。\n是否现在重启？",
                     "更新确认",

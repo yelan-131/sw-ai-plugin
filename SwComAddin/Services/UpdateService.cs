@@ -187,45 +187,48 @@ namespace SwComAddin.Services
             string tempDir = Path.Combine(Path.GetTempPath(), UpdateSubDir);
             string extractDir = Path.Combine(tempDir, "files");
 
-            // Clean up previous extraction if it exists
             if (Directory.Exists(extractDir))
                 Directory.Delete(extractDir, true);
 
             Directory.CreateDirectory(extractDir);
 
-            // Extract the ZIP
             System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractDir);
 
-            // Find SolidWorks executable path
             string swPath = GetSolidWorksPath();
 
-            // Generate update batch script
-            string batContent = string.Format(
-@"@echo off
-echo 正在更新 SW AI Plugin...
-:wait
-tasklist /FI ""IMAGENAME eq SLDWORKS.exe"" 2>NUL | find /I /N ""SLDWORKS.exe"">NUL
-if ""%ERRORLEVEL%""==""0"" (
-    timeout /t 2 /nobreak >NUL
-    goto wait
-)
-echo 正在复制文件...
-xcopy /E /Y ""{0}\*"" ""{1}\""
-echo 正在重新注册...
-""%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"" ""{1}\SwComAddin.dll"" /codebase /tlb
-echo 更新完成，正在启动 SolidWorks...
-start """" ""{2}""
-rd /s /q ""{3}""
-exit
-",
-                extractDir,    // {0} - temp extract path
-                installDir,    // {1} - install directory
-                swPath,        // {2} - SolidWorks executable path
-                tempDir        // {3} - temp directory to clean up
-            );
+            // Don't overwrite user config
+            string excludeFile = Path.Combine(tempDir, "exclude.txt");
+            File.WriteAllLines(excludeFile, new[] { "plugin_config.json", "install.bat", "uninstall.bat" });
+
+            // Build the batch script line by line using string concatenation
+            // to avoid escaping issues with nested quotes.
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("@echo off");
+            sb.AppendLine("echo Updating SW AI Plugin...");
+            sb.AppendLine("");
+            sb.AppendLine("echo Waiting for SolidWorks to exit...");
+            sb.AppendLine(":wait");
+            sb.AppendLine("tasklist /FI \"IMAGENAME eq SLDWORKS.exe\" 2>NUL | find /I /N \"SLDWORKS.exe\">NUL");
+            sb.AppendLine("if \"%ERRORLEVEL%\"==\"0\" (");
+            sb.AppendLine("    timeout /t 2 /nobreak >NUL");
+            sb.AppendLine("    goto wait");
+            sb.AppendLine(")");
+            sb.AppendLine("");
+            sb.AppendLine("echo Copying files...");
+            sb.AppendLine("xcopy /E /Y /EXCLUDE:\"" + excludeFile + "\" \"" + extractDir + "\\*\" \"" + installDir + "\\\"");
+            sb.AppendLine("");
+            sb.AppendLine("echo Re-registering DLL...");
+            sb.AppendLine("\"%WINDIR%\\Microsoft.NET\\Framework64\\v4.0.30319\\RegAsm.exe\" \"" + installDir + "\\SwComAddin.dll\" /codebase /tlb");
+            sb.AppendLine("");
+            sb.AppendLine("echo Update complete. Starting SolidWorks...");
+            sb.AppendLine("start \"\" \"" + swPath + "\"");
+            sb.AppendLine("");
+            sb.AppendLine("echo Cleaning up...");
+            sb.AppendLine("rd /s /q \"" + tempDir + "\"");
+            sb.AppendLine("exit");
 
             string batPath = Path.Combine(tempDir, "update.bat");
-            File.WriteAllText(batPath, batContent);
+            File.WriteAllText(batPath, sb.ToString());
 
             return batPath;
         }
