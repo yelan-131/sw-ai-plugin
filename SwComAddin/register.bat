@@ -2,17 +2,15 @@
 setlocal
 
 echo ========================================
-echo   SolidWorks AI Plugin - Registration
+echo   SW AI Plugin - Registration
 echo ========================================
 echo.
 
 set DLLDIR=%~dp0bin\Debug\net48
 set DLL=%DLLDIR%\SwComAddin.dll
 set REGASM=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe
-set NATIVE=%~dp0..\SwNativeShim\SwNativeShim.dll
 
-REM Step 1: Build managed DLL
-echo [1/4] Building SwComAddin...
+echo [1/3] Building SwComAddin...
 cd /d "%~dp0"
 dotnet build -c Debug
 if errorlevel 1 (
@@ -23,18 +21,7 @@ if errorlevel 1 (
 echo Build OK.
 echo.
 
-REM Step 2: Unregister native shim (if previously registered)
-echo [2/4] Unregistering old native shim (if any)...
-if exist "%NATIVE%" (
-    regsvr32 /u /s "%NATIVE%" 2>nul
-    echo Done.
-) else (
-    echo No native shim found, skipping.
-)
-echo.
-
-REM Step 3: Unregister old managed DLL (clean registration)
-echo [3/4] Cleaning old registration...
+echo [2/3] Unregistering old registration...
 if exist "%REGASM%" (
     "%REGASM%" "%DLL%" /unregister /tlb 2>nul
     echo Done.
@@ -45,8 +32,7 @@ if exist "%REGASM%" (
 )
 echo.
 
-REM Step 4: Register managed DLL
-echo [4/4] Registering managed COM addin...
+echo [3/3] Registering COM addin...
 net session >nul 2>&1
 if errorlevel 1 (
     echo Requesting admin privileges...

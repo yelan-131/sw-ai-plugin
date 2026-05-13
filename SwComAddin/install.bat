@@ -1,18 +1,23 @@
 @echo off
-chcp 65001 >nul
 setlocal
+
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ========================================
+    echo   SW AI Plugin - Install
+    echo ========================================
+    echo.
+    echo Requesting admin privileges...
+    echo Please click YES on the popup.
+    echo.
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b 0
+)
 
 echo ========================================
 echo   SW AI Plugin - Install
 echo ========================================
 echo.
-
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Requesting admin...
-    powershell -Command "Start-Process cmd -ArgumentList '/c chcp 65001 ^>nul ^& \"%~f0\"' -Verb RunAs -Wait"
-    exit /b 0
-)
 
 set REGASM=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe
 if not exist "%REGASM%" (
@@ -27,19 +32,21 @@ if not exist "%REGASM%" (
 set DLL=%~dp0SwComAddin.dll
 if not exist "%DLL%" (
     echo [ERROR] SwComAddin.dll not found
-    echo Make sure DLL is in the same folder as this script.
+    echo Make sure this script and DLL are in the same folder.
     echo.
     pause
     exit /b 1
 )
 
 echo Registering SW AI Plugin...
+echo DLL:   %DLL%
 echo.
 
 "%REGASM%" "%DLL%" /codebase /tlb
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Registration failed!
+    echo.
     pause
     exit /b 1
 )
