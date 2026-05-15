@@ -1,211 +1,317 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
+using Microsoft.Win32;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
+using SwComAddin.Models;
 
 namespace SwComAddin.Services
 {
     /// <summary>
-    /// Handles version checking, update downloading, and update execution
-    /// for the SW AI Plugin SolidWorks COM Add-in.
+    /// 更新流程：检查 → 下载 manifest → 决策 → 下载 ZIP → SHA256 校验 →
+    /// 生成 update.bat（Iteration 1 暂保留 .bat 路线，Iteration 2 再切 Updater.exe）→ 执行。
+    /// 数据契约：远端 Release 必须同时包含 manifest.json 与 ZIP 包，
+    /// 旧版（仅 ZIP，无 manifest）会被识别为「无法升级」并提示需先重装新版。
     /// </summary>
     public class UpdateService
     {
-        private const string DefaultRepo = "yelan-131/sw-ai-plugin";
         private const string UpdateSubDir = "SwAiPlugin_update";
-        private const string ConfigFileName = "plugin_config.json";
+        private const string ManifestAssetName = "manifest.json";
 
-        private static readonly HttpClient _http = new HttpClient
+        /// <summary>下载 ZIP 包的 buffer。</summary>
+        private const int DownloadBufferBytes = 81920;
+
+        /// <summary>HttpClient 通用超时（仅 manifest，下载 ZIP 用单独 client）。</summary>
+        private static readonly TimeSpan MetaTimeout = TimeSpan.FromSeconds(15);
+
+        /// <summary>下载 ZIP 的超时，可被取消令牌中断。</summary>
+        private static readonly TimeSpan PackageTimeout = TimeSpan.FromMinutes(30);
+
+        private readonly PluginMeta _meta;
+        private readonly UserConfig _userCfg;
+        private readonly HttpClient _metaClient;
+
+        public UpdateService(PluginMeta meta, UserConfig userCfg)
         {
-            Timeout = TimeSpan.FromMinutes(5)
-        };
-
-        /// <summary>
-        /// Reads the current plugin version from plugin_config.json.
-        /// Returns "1.0.0" if the file or key is not found.
-        /// </summary>
-        /// <returns>The current version string.</returns>
-        public string GetCurrentVersion()
-        {
-            try
-            {
-                string dllDir = GetDllDirectory();
-                string configPath = Path.Combine(dllDir, ConfigFileName);
-
-                if (!File.Exists(configPath))
-                    return "1.0.0";
-
-                string json = File.ReadAllText(configPath);
-                using (JsonDocument doc = JsonDocument.Parse(json))
-                {
-                    if (doc.RootElement.TryGetProperty("version", out JsonElement versionElem))
-                    {
-                        string ver = versionElem.GetString();
-                        return !string.IsNullOrEmpty(ver) ? ver : "1.0.0";
-                    }
-                }
-            }
-            catch
-            {
-                // Never crash -- return default version
-            }
-
-            return "1.0.0";
+            _meta = meta ?? new PluginMeta();
+            _userCfg = userCfg ?? new UserConfig();
+            _metaClient = CreateHttpClient(MetaTimeout);
         }
 
+        // ────────────────────────── Public API ──────────────────────────
+
+        public string GetCurrentVersion() => string.IsNullOrEmpty(_meta.Version) ? "0.1.1" : _meta.Version;
+
         /// <summary>
-        /// Checks GitHub Releases API for the latest release and determines
-        /// whether an update is available.
+        /// 完整的检查结果，封装给 UI 层。失败时 <see cref="ErrorCode"/> 不为空。
         /// </summary>
-        /// <returns>
-        /// A tuple containing: whether an update is available, the latest version tag,
-        /// the download URL for the ZIP asset, and the release notes body.
-        /// </returns>
-        public async Task<(bool hasUpdate, string latestVersion, string downloadUrl, string releaseNotes)> CheckForUpdateAsync()
+        public class CheckResult
         {
-            try
+            public bool HasUpdate { get; set; }
+            public bool Skipped { get; set; }            // 用户主动 skip 过此版本
+            public bool Deferred { get; set; }           // 在「稍后提醒」窗口内
+            public string Source { get; set; } = "";    // gitee | github | mirror
+            public UpdateManifest? Manifest { get; set; }
+            public string? ErrorCode { get; set; }
+            public string? ErrorMessage { get; set; }
+        }
+
+        public async Task<CheckResult> CheckForUpdateAsync(CancellationToken cancel = default)
+        {
+            UpdateLogger.Info("check", new Dictionary<string, object?> { ["phase"] = "started", ["current"] = GetCurrentVersion() });
+            // 1. 「稍后提醒」窗口内则跳过
+            if (TryParseUtc(_userCfg.DeferUntilUtc, out var deferUntil) && DateTime.UtcNow < deferUntil)
             {
-                string repo = GetUpdateRepo();
-                string url = $"https://api.github.com/repos/{repo}/releases/latest";
-
-                var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.UserAgent.ParseAdd("SwAiPlugin");
-
-                HttpResponseMessage response = await _http.SendAsync(request);
-                if (!response.IsSuccessStatusCode)
-                    return (false, null, null, null);
-
-                string json = await response.Content.ReadAsStringAsync();
-                using (JsonDocument doc = JsonDocument.Parse(json))
+                UpdateLogger.Info("check", new Dictionary<string, object?>
                 {
-                    JsonElement root = doc.RootElement;
+                    ["result"] = "deferred",
+                    ["defer_until"] = _userCfg.DeferUntilUtc
+                });
+                return new CheckResult { Deferred = true };
+            }
 
-                    // Tag name is the version (e.g. "v1.2.0" or "1.2.0")
-                    string tagName = root.TryGetProperty("tag_name", out JsonElement tagElem)
-                        ? tagElem.GetString() ?? ""
-                        : "";
+            // 2. 按 UpdateSource 决定查询顺序
+            var sources = ResolveSources();
 
-                    string releaseNotes = root.TryGetProperty("body", out JsonElement bodyElem)
-                        ? bodyElem.GetString() ?? ""
-                        : "";
-
-                    string htmlUrl = root.TryGetProperty("html_url", out JsonElement htmlElem)
-                        ? htmlElem.GetString() ?? ""
-                        : "";
-
-                    // Find the first .zip asset's browser_download_url
-                    string downloadUrl = null;
-                    if (root.TryGetProperty("assets", out JsonElement assetsElem))
+            CheckResult? bestResult = null;
+            foreach (var source in sources)
+            {
+                cancel.ThrowIfCancellationRequested();
+                var r = await CheckSourceAsync(source, cancel);
+                if (r.Manifest != null)
+                {
+                    if (bestResult == null || bestResult.Manifest == null) bestResult = r;
+                    else
                     {
-                        foreach (JsonElement asset in assetsElem.EnumerateArray())
+                        if (SemanticVersion.TryParse(r.Manifest.Version, out var vNew) &&
+                            SemanticVersion.TryParse(bestResult.Manifest.Version, out var vOld) &&
+                            vNew! > vOld!)
                         {
-                            if (asset.TryGetProperty("name", out JsonElement nameElem))
-                            {
-                                string name = nameElem.GetString() ?? "";
-                                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    if (asset.TryGetProperty("browser_download_url", out JsonElement dlElem))
-                                    {
-                                        downloadUrl = dlElem.GetString();
-                                    }
-                                    break;
-                                }
-                            }
+                            bestResult = r;
                         }
                     }
-
-                    // Compare versions
-                    string currentVersion = GetCurrentVersion();
-                    bool hasUpdate = IsNewerVersion(tagName, currentVersion);
-
-                    return (hasUpdate, tagName, downloadUrl, releaseNotes);
+                }
+                else if (bestResult == null)
+                {
+                    bestResult = r; // 保留错误信息
                 }
             }
-            catch
+
+            if (bestResult?.Manifest == null)
             {
-                // Network errors, JSON parse errors, etc. -- never crash
-                return (false, null, null, null);
+                return bestResult ?? new CheckResult { ErrorCode = UpdateErrorCodes.CheckNetwork, ErrorMessage = "未能联系任何更新源" };
             }
+
+            var manifest = bestResult.Manifest;
+
+            // 3. 通道过滤：用户未开 Beta 时拒绝 prerelease
+            if (!_userCfg.ReceivePrerelease && IsPreRelease(manifest))
+            {
+                UpdateLogger.Info("check", new Dictionary<string, object?>
+                {
+                    ["result"] = "channel-mismatch",
+                    ["version"] = manifest.Version,
+                    ["channel"] = manifest.Channel
+                });
+                return new CheckResult { Source = bestResult.Source, Manifest = manifest, HasUpdate = false };
+            }
+
+            // 4. 版本比较
+            if (!SemanticVersion.TryParse(manifest.Version, out var latest) ||
+                !SemanticVersion.TryParse(GetCurrentVersion(), out var current))
+            {
+                return new CheckResult
+                {
+                    Source = bestResult.Source,
+                    Manifest = manifest,
+                    ErrorCode = UpdateErrorCodes.CheckParse,
+                    ErrorMessage = "无法解析版本号"
+                };
+            }
+
+            bool hasUpdate = latest! > current!;
+
+            // 5. 跳过列表
+            bool skipped = _userCfg.SkippedVersions != null &&
+                           _userCfg.SkippedVersions.Contains(manifest.Version);
+
+            UpdateLogger.Info("check", new Dictionary<string, object?>
+            {
+                ["result"] = hasUpdate ? (skipped ? "skipped" : "available") : "uptodate",
+                ["current"] = current!.ToString(),
+                ["latest"] = latest!.ToString(),
+                ["source"] = bestResult.Source
+            });
+
+            return new CheckResult
+            {
+                HasUpdate = hasUpdate && !skipped,
+                Skipped = skipped,
+                Source = bestResult.Source,
+                Manifest = manifest
+            };
         }
 
         /// <summary>
-        /// Downloads the update ZIP file from the given URL to a temp directory.
-        /// Reports download progress via the provided IProgress handle.
+        /// 下载 ZIP，按 manifest.primary_url → mirrors[] 顺序尝试。校验 SHA256，校验失败抛 IOException。
         /// </summary>
-        /// <param name="downloadUrl">The URL of the ZIP file to download.</param>
-        /// <param name="progress">Progress reporter (0.0 to 1.0).</param>
-        /// <returns>The local file path of the downloaded ZIP.</returns>
-        public async Task<string> DownloadUpdateAsync(string downloadUrl, IProgress<double> progress)
+        public async Task<string> DownloadUpdateAsync(
+            UpdateManifest manifest,
+            IProgress<DownloadProgress>? progress,
+            CancellationToken cancel = default)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), UpdateSubDir);
             Directory.CreateDirectory(tempDir);
 
             string zipPath = Path.Combine(tempDir, "update.zip");
 
-            using (var response = await _http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+            var candidates = new List<string>();
+            if (!string.IsNullOrEmpty(manifest.Package.PrimaryUrl))
+                candidates.Add(manifest.Package.PrimaryUrl);
+            if (manifest.Package.Mirrors != null)
+                candidates.AddRange(manifest.Package.Mirrors.Where(u => !string.IsNullOrWhiteSpace(u)));
+
+            if (candidates.Count == 0)
+                throw new InvalidOperationException("Manifest 未提供任何下载 URL");
+
+            Exception? lastError = null;
+            foreach (var url in candidates)
             {
-                response.EnsureSuccessStatusCode();
-
-                long? totalBytes = response.Content.Headers.ContentLength;
-
-                using (Stream contentStream = await response.Content.ReadAsStreamAsync())
-                using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                cancel.ThrowIfCancellationRequested();
+                try
                 {
-                    byte[] buffer = new byte[81920]; // 80 KB buffer
-                    long bytesRead = 0;
-                    int read;
-
-                    while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    UpdateLogger.Info("download", new Dictionary<string, object?>
                     {
-                        await fileStream.WriteAsync(buffer, 0, read);
-                        bytesRead += read;
+                        ["url"] = url,
+                        ["size"] = manifest.Package.Size
+                    });
 
-                        if (totalBytes.HasValue && totalBytes.Value > 0)
+                    await DownloadToFileAsync(url, zipPath, progress, cancel);
+
+                    // SHA256 校验
+                    var actual = ComputeSha256(zipPath);
+                    var expected = (manifest.Package.Sha256 ?? string.Empty).Trim().ToLowerInvariant();
+                    if (!string.IsNullOrEmpty(expected) && !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        UpdateLogger.Error("verify", UpdateErrorCodes.VerifyHashMismatch, new Dictionary<string, object?>
                         {
-                            progress?.Report((double)bytesRead / totalBytes.Value);
-                        }
+                            ["expected"] = expected,
+                            ["actual"] = actual,
+                            ["url"] = url
+                        });
+                        try { File.Delete(zipPath); } catch { }
+                        lastError = new InvalidDataException(
+                            "SHA256 校验失败：期望 " +
+                            expected.Substring(0, Math.Min(16, expected.Length)) + "…，实际 " +
+                            actual.Substring(0, Math.Min(16, actual.Length)) + "…");
+                        continue; // 尝试下一个镜像
                     }
+
+                    UpdateLogger.Info("verify", new Dictionary<string, object?>
+                    {
+                        ["result"] = "ok",
+                        ["sha256"] = actual
+                    });
+                    return zipPath;
+                }
+                catch (OperationCanceledException)
+                {
+                    UpdateLogger.Warn("download", UpdateErrorCodes.DownloadCancelled);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    UpdateLogger.Warn("download", UpdateErrorCodes.DownloadHttp, new Dictionary<string, object?>
+                    {
+                        ["url"] = url,
+                        ["error"] = ex.Message
+                    });
+                    lastError = ex;
                 }
             }
 
-            progress?.Report(1.0);
-            return zipPath;
+            throw lastError ?? new IOException("所有下载源均失败");
         }
 
         /// <summary>
-        /// Extracts the downloaded ZIP and generates a batch script that waits for
-        /// SolidWorks to exit, copies files, re-registers the DLL, and restarts SolidWorks.
+        /// 生成 update.bat 接力脚本（含备份+回滚）。
+        /// 注意：版本号不再由主插件写盘，而由 update.bat 在 RegAsm 成功后写入 plugin_meta.json。
         /// </summary>
-        /// <param name="zipPath">Path to the downloaded ZIP file.</param>
-        /// <param name="installDir">The target installation directory.</param>
-        /// <returns>The path to the generated update.bat script.</returns>
-        public string PrepareUpdate(string zipPath, string installDir)
+        public string PrepareUpdate(string zipPath, string installDir, UpdateManifest manifest)
         {
             string tempDir = Path.Combine(Path.GetTempPath(), UpdateSubDir);
             string extractDir = Path.Combine(tempDir, "files");
+            string backupDir = Path.Combine(tempDir, "backup");
 
             if (Directory.Exists(extractDir))
                 Directory.Delete(extractDir, true);
-
             Directory.CreateDirectory(extractDir);
 
             System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractDir);
 
+            // 防 Zip Slip：检查解压后所有文件都在 extractDir 之内
+            string extractFull = Path.GetFullPath(extractDir);
+            foreach (var f in Directory.EnumerateFiles(extractDir, "*", SearchOption.AllDirectories))
+            {
+                if (!Path.GetFullPath(f).StartsWith(extractFull, StringComparison.OrdinalIgnoreCase))
+                    throw new SecurityException("更新包中检测到非法路径，已中止");
+            }
+
             string swPath = GetSolidWorksPath();
+            string regAsm = @"%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe";
 
-            // Don't overwrite user config
+            // preserve 清单
+            var preserve = new List<string>
+            {
+                "user_config.json",
+                "Data/custom_library.json",
+                "install.bat",
+                "uninstall.bat"
+            };
+            if (manifest.Preserve != null)
+                preserve.AddRange(manifest.Preserve);
+
             string excludeFile = Path.Combine(tempDir, "exclude.txt");
-            File.WriteAllLines(excludeFile, new[] { "plugin_config.json", "install.bat", "uninstall.bat" });
+            File.WriteAllLines(excludeFile, preserve.Distinct(StringComparer.OrdinalIgnoreCase), Encoding.Default);
 
-            // Build the batch script line by line using string concatenation
-            // to avoid escaping issues with nested quotes.
-            var sb = new System.Text.StringBuilder();
+            // plugin_meta.json 内容：以远端 manifest 为准，由 .bat 写入
+            string metaJson = JsonSerializer.Serialize(new
+            {
+                schema = "1.0",
+                version = manifest.Version,
+                channel = manifest.Channel,
+                build_date = manifest.ReleasedAt,
+                update_repo = _meta.UpdateRepo,
+                gitee_repo = _meta.GiteeRepo
+            });
+            string metaPath = Path.Combine(tempDir, "plugin_meta.json");
+            File.WriteAllText(metaPath, metaJson, new UTF8Encoding(false));
+
+            var sb = new StringBuilder();
             sb.AppendLine("@echo off");
+            sb.AppendLine("setlocal ENABLEEXTENSIONS");
+            sb.AppendLine();
+            sb.AppendLine("set LOGFILE=" + EscapeBat(tempDir + "\\update.log"));
+            sb.AppendLine("set BACKUP_DIR=" + EscapeBat(backupDir));
+            sb.AppendLine("set INSTALL_DIR=" + EscapeBat(installDir));
+            sb.AppendLine("set EXTRACT_DIR=" + EscapeBat(extractDir));
+            sb.AppendLine("set EXCLUDE_FILE=" + EscapeBat(excludeFile));
+            sb.AppendLine("set META_FILE=" + EscapeBat(metaPath));
+            sb.AppendLine("set REGASM=" + regAsm);
+            sb.AppendLine("set SW_PATH=" + EscapeBat(swPath));
+            sb.AppendLine();
+            sb.AppendLine("echo [%date% %time%] update.bat started > \"%LOGFILE%\"");
             sb.AppendLine("echo Updating SW AI Plugin...");
-            sb.AppendLine("");
+            sb.AppendLine();
             sb.AppendLine("echo Waiting for SolidWorks to exit...");
             sb.AppendLine(":wait");
             sb.AppendLine("tasklist /FI \"IMAGENAME eq SLDWORKS.exe\" 2>NUL | find /I /N \"SLDWORKS.exe\">NUL");
@@ -213,167 +319,667 @@ namespace SwComAddin.Services
             sb.AppendLine("    timeout /t 2 /nobreak >NUL");
             sb.AppendLine("    goto wait");
             sb.AppendLine(")");
-            sb.AppendLine("");
-            sb.AppendLine("echo Copying files...");
-            sb.AppendLine("xcopy /E /Y /EXCLUDE:\"" + excludeFile + "\" \"" + extractDir + "\\*\" \"" + installDir + "\\\"");
-            sb.AppendLine("");
-            sb.AppendLine("echo Re-registering DLL...");
-            sb.AppendLine("\"%WINDIR%\\Microsoft.NET\\Framework64\\v4.0.30319\\RegAsm.exe\" \"" + installDir + "\\SwComAddin.dll\" /codebase /tlb");
-            sb.AppendLine("");
-            sb.AppendLine("echo Update complete. Starting SolidWorks...");
-            sb.AppendLine("start \"\" \"" + swPath + "\"");
-            sb.AppendLine("");
-            sb.AppendLine("echo Cleaning up...");
-            sb.AppendLine("rd /s /q \"" + tempDir + "\"");
-            sb.AppendLine("exit");
+            sb.AppendLine();
+            sb.AppendLine("echo Creating backup... >> \"%LOGFILE%\"");
+            sb.AppendLine("if not exist \"%BACKUP_DIR%\" mkdir \"%BACKUP_DIR%\"");
+            sb.AppendLine("xcopy /E /Y /Q /EXCLUDE:\"%EXCLUDE_FILE%\" \"%INSTALL_DIR%\\*\" \"%BACKUP_DIR%\\\" >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine("if errorlevel 4 (");
+            sb.AppendLine("    echo [ERROR] Backup failed, aborting update >> \"%LOGFILE%\"");
+            sb.AppendLine("    goto :abort");
+            sb.AppendLine(")");
+            sb.AppendLine();
+            sb.AppendLine("echo Copying files... >> \"%LOGFILE%\"");
+            sb.AppendLine("xcopy /E /Y /EXCLUDE:\"%EXCLUDE_FILE%\" \"%EXTRACT_DIR%\\*\" \"%INSTALL_DIR%\\\" >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine("if errorlevel 1 (");
+            sb.AppendLine("    echo [ERROR] xcopy failed >> \"%LOGFILE%\"");
+            sb.AppendLine("    goto :rollback");
+            sb.AppendLine(")");
+            sb.AppendLine();
+            sb.AppendLine("echo Re-registering DLL... >> \"%LOGFILE%\"");
+            sb.AppendLine("\"%REGASM%\" \"%INSTALL_DIR%\\SwComAddin.dll\" /codebase /tlb >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine("if errorlevel 1 (");
+            sb.AppendLine("    echo [ERROR] RegAsm failed >> \"%LOGFILE%\"");
+            sb.AppendLine("    goto :rollback");
+            sb.AppendLine(")");
+            sb.AppendLine();
+            sb.AppendLine("echo Writing plugin_meta.json... >> \"%LOGFILE%\"");
+            sb.AppendLine("copy /Y \"%META_FILE%\" \"%INSTALL_DIR%\\plugin_meta.json\" >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine("if errorlevel 1 (");
+            sb.AppendLine("    echo [WARN] plugin_meta.json copy failed, retrying... >> \"%LOGFILE%\"");
+            sb.AppendLine("    timeout /t 2 /nobreak >NUL");
+            sb.AppendLine("    copy /Y \"%META_FILE%\" \"%INSTALL_DIR%\\plugin_meta.json\" >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine(")");
+            sb.AppendLine("goto :success");
+            sb.AppendLine();
+            sb.AppendLine(":rollback");
+            sb.AppendLine("echo Rolling back update... >> \"%LOGFILE%\"");
+            sb.AppendLine("xcopy /E /Y /Q \"%BACKUP_DIR%\\*\" \"%INSTALL_DIR%\\\" >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine("echo Re-registering original DLL... >> \"%LOGFILE%\"");
+            sb.AppendLine("\"%REGASM%\" \"%INSTALL_DIR%\\SwComAddin.dll\" /codebase /tlb >> \"%LOGFILE%\" 2>&1");
+            sb.AppendLine("echo [ROLLBACK] Update failed and was rolled back. Please restart SolidWorks. >> \"%LOGFILE%\"");
+            sb.AppendLine("goto :cleanup");
+            sb.AppendLine();
+            sb.AppendLine(":abort");
+            sb.AppendLine("echo [ABORT] Backup failed, update not applied. >> \"%LOGFILE%\"");
+            sb.AppendLine("goto :cleanup");
+            sb.AppendLine();
+            sb.AppendLine(":success");
+            sb.AppendLine("echo Update complete. Starting SolidWorks... >> \"%LOGFILE%\"");
+            sb.AppendLine("rd /s /q \"%BACKUP_DIR%\" 2>NUL");
+            sb.AppendLine("start \"\" \"%SW_PATH%\"");
+            sb.AppendLine();
+            sb.AppendLine(":cleanup");
+            sb.AppendLine("echo Cleaning up... >> \"%LOGFILE%\"");
+            sb.AppendLine("rd /s /q \"" + EscapeBat(tempDir) + "\"");
+            sb.AppendLine("exit /b 0");
 
             string batPath = Path.Combine(tempDir, "update.bat");
-            File.WriteAllText(batPath, sb.ToString());
+            File.WriteAllText(batPath, sb.ToString(), Encoding.Default);
+
+            UpdateLogger.Info("staging", new Dictionary<string, object?>
+            {
+                ["bat"] = batPath,
+                ["install_dir"] = installDir,
+                ["preserve_count"] = preserve.Count
+            });
 
             return batPath;
         }
 
-        /// <summary>
-        /// Launches the update batch script and shuts down the current application.
-        /// The batch script waits for SolidWorks to exit before applying the update.
-        /// </summary>
-        /// <param name="batPath">Path to the update.bat script generated by <see cref="PrepareUpdate"/>.</param>
+        private static string EscapeBat(string path) => path.Replace("&", "^&");
+
         public void ExecuteUpdate(string batPath)
         {
+            UpdateLogger.Info("execute", new Dictionary<string, object?> { ["bat"] = batPath });
+
             Process.Start(new ProcessStartInfo
             {
                 FileName = batPath,
                 UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Normal
+                WindowStyle = ProcessWindowStyle.Hidden,
+                CreateNoWindow = true
+            });
+        }
+
+        // ────────────────────────── Public API: multi-release ──────────────────────────
+
+        /// <summary>
+        /// 单个 Release 的摘要信息，供 UI 版本选择器展示。
+        /// </summary>
+        public class ReleaseInfo
+        {
+            public string Version { get; set; } = "";
+            public string ReleasedAt { get; set; } = "";
+            public string Channel { get; set; } = "stable";
+            public UpdateManifest? Manifest { get; set; }
+            public string Source { get; set; } = "";
+        }
+
+        /// <summary>
+        /// 获取最近 maxCount 个 Release 的 manifest 信息，供 Tab5 手动检查时的版本选择器使用。
+        /// 汇总所有更新源，按版本号降序排列并去重（取最高版本对应的源）。
+        /// </summary>
+        public async Task<List<ReleaseInfo>> FetchAllReleasesAsync(int maxCount = 5, CancellationToken cancel = default)
+        {
+            UpdateLogger.Info("fetch-releases", new Dictionary<string, object?>
+            {
+                ["phase"] = "started",
+                ["maxCount"] = maxCount
             });
 
-            // Shut down the WPF application
-            try
+            var sources = ResolveSources();
+            var allReleases = new List<ReleaseInfo>();
+
+            foreach (var source in sources)
             {
-                System.Windows.Application.Current.Shutdown();
-            }
-            catch
-            {
-                // If WPF Application.Current is not available (e.g. during testing),
-                // fall back to exiting the process
-                Environment.Exit(0);
-            }
-        }
-
-        // ────────────────────────── Private Helpers ──────────────────────────
-
-        /// <summary>
-        /// Reads the update_repo value from plugin_config.json.
-        /// Falls back to <see cref="DefaultRepo"/> if not configured.
-        /// </summary>
-        private string GetUpdateRepo()
-        {
-            try
-            {
-                string dllDir = GetDllDirectory();
-                string configPath = Path.Combine(dllDir, ConfigFileName);
-
-                if (!File.Exists(configPath))
-                    return DefaultRepo;
-
-                string json = File.ReadAllText(configPath);
-                using (JsonDocument doc = JsonDocument.Parse(json))
+                cancel.ThrowIfCancellationRequested();
+                try
                 {
-                    if (doc.RootElement.TryGetProperty("update_repo", out JsonElement repoElem))
+                    var releases = await FetchReleasesFromSourceAsync(source, maxCount, cancel);
+                    allReleases.AddRange(releases);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    UpdateLogger.Warn("fetch-releases", UpdateErrorCodes.CheckNetwork, new Dictionary<string, object?>
                     {
-                        string repo = repoElem.GetString();
-                        return !string.IsNullOrEmpty(repo) ? repo : DefaultRepo;
-                    }
+                        ["source"] = source.Name,
+                        ["error"] = ex.Message
+                    });
                 }
             }
-            catch
+
+            // 去重：同一版本号取最高版本对应的源（实际同一版本号取第一个出现的即可）
+            var deduped = new Dictionary<string, ReleaseInfo>();
+            foreach (var r in allReleases)
             {
-                // Fall back to default
+                if (string.IsNullOrEmpty(r.Version)) continue;
+                if (!deduped.ContainsKey(r.Version))
+                {
+                    deduped[r.Version] = r;
+                }
             }
 
-            return DefaultRepo;
+            // 按版本号降序排列
+            var sorted = deduped.Values
+                .OrderByDescending(r =>
+                {
+                    if (SemanticVersion.TryParse(r.Version, out var sv)) return sv;
+                    return null;
+                }, Comparer<SemanticVersion?>.Create((a, b) =>
+                {
+                    if (a == null && b == null) return 0;
+                    if (a == null) return 1;
+                    if (b == null) return -1;
+                    return a.CompareTo(b);
+                }))
+                .Take(maxCount)
+                .ToList();
+
+            UpdateLogger.Info("fetch-releases", new Dictionary<string, object?>
+            {
+                ["result"] = "ok",
+                ["total"] = allReleases.Count,
+                ["deduped"] = deduped.Count,
+                ["returned"] = sorted.Count
+            });
+
+            return sorted;
         }
 
         /// <summary>
-        /// Returns the directory containing the currently executing assembly (DLL).
+        /// 从单个更新源获取多个 Release 信息。
+        /// GitHub/Gitee：调用 /releases 列表 API，逐个解析 assets 中的 manifest.json。
+        /// Mirror：尝试 releases.json 或返回空（Mirror 可能不支持多版本）。
         /// </summary>
-        private static string GetDllDirectory()
+        private async Task<List<ReleaseInfo>> FetchReleasesFromSourceAsync(SourceSpec source, int maxCount, CancellationToken cancel)
         {
-            string location = Assembly.GetExecutingAssembly().Location;
-            return !string.IsNullOrEmpty(location)
-                ? Path.GetDirectoryName(location)
-                : AppDomain.CurrentDomain.BaseDirectory;
+            var results = new List<ReleaseInfo>();
+
+            switch (source.Name)
+            {
+                case "gitee":
+                    results = await FetchReleasesFromGitHostAsync(
+                        "gitee",
+                        string.IsNullOrEmpty(_meta.GiteeRepo) ? "yelan1387/sw-ai-plugin" : _meta.GiteeRepo,
+                        "https://gitee.com/api/v5/repos",
+                        maxCount, cancel);
+                    break;
+
+                case "github":
+                    results = await FetchReleasesFromGitHostAsync(
+                        "github",
+                        string.IsNullOrEmpty(_meta.UpdateRepo) ? "yelan-131/sw-ai-plugin" : _meta.UpdateRepo,
+                        "https://api.github.com/repos",
+                        maxCount, cancel);
+                    break;
+
+                case "mirror":
+                    // Mirror 可能不支持多版本列表，返回空即可
+                    break;
+            }
+
+            // 标记来源
+            foreach (var r in results)
+            {
+                r.Source = source.Name;
+            }
+
+            return results;
         }
 
         /// <summary>
-        /// Compares two version strings, handling optional "v" prefix.
-        /// Returns true if <paramref name="newVersion"/> is newer than <paramref name="currentVersion"/>.
+        /// 从 GitHub/Gitee 的 /releases 列表 API 获取多个 Release，解析每个 Release 的 assets 中的 manifest.json。
         /// </summary>
-        private static bool IsNewerVersion(string newVersion, string currentVersion)
+        private async Task<List<ReleaseInfo>> FetchReleasesFromGitHostAsync(
+            string sourceName, string repo, string apiBase, int maxCount, CancellationToken cancel)
+        {
+            var results = new List<ReleaseInfo>();
+
+            string url = $"{apiBase}/{repo}/releases";
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.UserAgent.ParseAdd("SwAiPlugin");
+
+            HttpResponseMessage resp;
+            try
+            {
+                resp = await _metaClient.SendAsync(req, cancel);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    UpdateLogger.Warn("fetch-releases", UpdateErrorCodes.CheckNetwork, new Dictionary<string, object?>
+                    {
+                        ["source"] = sourceName,
+                        ["status"] = (int)resp.StatusCode
+                    });
+                    return results;
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateLogger.Warn("fetch-releases", UpdateErrorCodes.CheckNetwork, new Dictionary<string, object?>
+                {
+                    ["source"] = sourceName,
+                    ["error"] = ex.Message
+                });
+                return results;
+            }
+
+            string json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return results;
+
+            int count = 0;
+            foreach (var releaseEl in doc.RootElement.EnumerateArray())
+            {
+                if (count >= maxCount) break;
+                cancel.ThrowIfCancellationRequested();
+
+                // 解析 assets 中的 manifest.json 和 manifest.sig URL
+                var urls = ParseAssetUrlsFromRelease(releaseEl);
+                if (urls?.ManifestUrl == null) continue;
+
+                // 下载并验证 manifest（逻辑与 FetchAndVerifyManifestAsync 一致）
+                var manifest = await FetchAndVerifyManifestAsync(urls, cancel);
+                if (manifest == null) continue;
+
+                // 提取 release 元数据
+                string tagName = "";
+                if (releaseEl.TryGetProperty("tag_name", out var tagProp))
+                    tagName = tagProp.GetString() ?? "";
+
+                string publishedAt = "";
+                if (releaseEl.TryGetProperty("published_at", out var pubProp))
+                    publishedAt = pubProp.GetString() ?? "";
+
+                results.Add(new ReleaseInfo
+                {
+                    Version = string.IsNullOrEmpty(manifest.Version) ? tagName.TrimStart('v') : manifest.Version,
+                    ReleasedAt = string.IsNullOrEmpty(manifest.ReleasedAt) ? publishedAt : manifest.ReleasedAt,
+                    Channel = manifest.Channel,
+                    Manifest = manifest,
+                    Source = sourceName
+                });
+
+                count++;
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// 从单个 Release 的 JSON 元素中解析 manifest.json 和 manifest.sig 的下载 URL。
+        /// </summary>
+        private static AssetUrls? ParseAssetUrlsFromRelease(JsonElement releaseEl)
+        {
+            if (!releaseEl.TryGetProperty("assets", out var assets)) return null;
+
+            var urls = new AssetUrls();
+            foreach (var a in assets.EnumerateArray())
+            {
+                if (!a.TryGetProperty("name", out var n) || !a.TryGetProperty("browser_download_url", out var dl))
+                    continue;
+                string name = n.GetString() ?? "";
+                if (string.Equals(name, ManifestAssetName, StringComparison.OrdinalIgnoreCase))
+                    urls.ManifestUrl = dl.GetString();
+                else if (string.Equals(name, "manifest.sig", StringComparison.OrdinalIgnoreCase))
+                    urls.SigUrl = dl.GetString();
+            }
+            return urls.ManifestUrl != null ? urls : null;
+        }
+
+        // ────────────────────────── Internal: check ──────────────────────────
+
+        private class SourceSpec
+        {
+            public string Name { get; }
+            public Func<CancellationToken, Task<UpdateManifest?>> Fetch { get; }
+            public SourceSpec(string name, Func<CancellationToken, Task<UpdateManifest?>> fetch)
+            {
+                Name = name;
+                Fetch = fetch;
+            }
+        }
+
+        private class AssetUrls
+        {
+            public string? ManifestUrl { get; set; }
+            public string? SigUrl { get; set; }
+        }
+
+        private IEnumerable<SourceSpec> ResolveSources()
+        {
+            var list = new List<SourceSpec>();
+            string src = (_userCfg.UpdateSource ?? "auto").Trim().ToLowerInvariant();
+
+            switch (src)
+            {
+                case "gitee":
+                    list.Add(new SourceSpec("gitee", ct => FetchGiteeManifestAsync(ct)));
+                    break;
+                case "github":
+                    list.Add(new SourceSpec("github", ct => FetchGitHubManifestAsync(ct)));
+                    break;
+                case "mirror" when !string.IsNullOrEmpty(_userCfg.MirrorUrl):
+                    list.Add(new SourceSpec("mirror", ct => FetchMirrorManifestAsync(_userCfg.MirrorUrl!, ct)));
+                    break;
+                default:
+                    // auto：Gitee 主、GitHub 备（按用户选择的策略；并发请求 + 取最高版本）
+                    list.Add(new SourceSpec("gitee", ct => FetchGiteeManifestAsync(ct)));
+                    list.Add(new SourceSpec("github", ct => FetchGitHubManifestAsync(ct)));
+                    if (!string.IsNullOrEmpty(_userCfg.MirrorUrl))
+                        list.Add(new SourceSpec("mirror", ct => FetchMirrorManifestAsync(_userCfg.MirrorUrl!, ct)));
+                    break;
+            }
+            return list;
+        }
+
+        private async Task<CheckResult> CheckSourceAsync(SourceSpec source, CancellationToken cancel)
         {
             try
             {
-                // Strip leading 'v' or 'V' if present
-                string newClean = newVersion.TrimStart('v', 'V');
-                string curClean = currentVersion.TrimStart('v', 'V');
-
-                if (Version.TryParse(newClean, out Version newVer) &&
-                    Version.TryParse(curClean, out Version curVer))
+                var manifest = await source.Fetch(cancel);
+                if (manifest == null)
+                    return new CheckResult { Source = source.Name, ErrorCode = UpdateErrorCodes.CheckNetwork };
+                return new CheckResult { Source = source.Name, Manifest = manifest };
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                UpdateLogger.Warn("check", UpdateErrorCodes.CheckNetwork, new Dictionary<string, object?>
                 {
-                    return newVer > curVer;
+                    ["source"] = source.Name,
+                    ["error"] = ex.Message
+                });
+                return new CheckResult { Source = source.Name, ErrorCode = UpdateErrorCodes.CheckNetwork, ErrorMessage = ex.Message };
+            }
+        }
+
+        private async Task<UpdateManifest?> FetchGiteeManifestAsync(CancellationToken cancel)
+        {
+            string repo = string.IsNullOrEmpty(_meta.GiteeRepo) ? "yelan1387/sw-ai-plugin" : _meta.GiteeRepo;
+            string url = $"https://gitee.com/api/v5/repos/{repo}/releases/latest";
+            var urls = await ResolveAssetUrlsAsync(url, cancel);
+            if (urls?.ManifestUrl == null) return null;
+            return await FetchAndVerifyManifestAsync(urls, cancel);
+        }
+
+        private async Task<UpdateManifest?> FetchGitHubManifestAsync(CancellationToken cancel)
+        {
+            string repo = string.IsNullOrEmpty(_meta.UpdateRepo) ? "yelan-131/sw-ai-plugin" : _meta.UpdateRepo;
+            string url = $"https://api.github.com/repos/{repo}/releases/latest";
+            var urls = await ResolveAssetUrlsAsync(url, cancel);
+            if (urls?.ManifestUrl == null) return null;
+            return await FetchAndVerifyManifestAsync(urls, cancel);
+        }
+
+        private async Task<UpdateManifest?> FetchMirrorManifestAsync(string mirrorBase, CancellationToken cancel)
+        {
+            string base_ = mirrorBase.TrimEnd('/');
+            var urls = new AssetUrls
+            {
+                ManifestUrl = base_ + "/manifest.json",
+                SigUrl = base_ + "/manifest.sig"
+            };
+            return await FetchAndVerifyManifestAsync(urls, cancel);
+        }
+
+        /// <summary>
+        /// 下载 manifest 原始字节 + 可选签名 → 验证 → 反序列化。
+        /// 无签名时记录警告但继续（向后兼容无签名旧版本）。
+        /// </summary>
+        private async Task<UpdateManifest?> FetchAndVerifyManifestAsync(AssetUrls urls, CancellationToken cancel)
+        {
+            // 下载 manifest 原始字节
+            var manifestBytes = await DownloadBytesAsync(urls.ManifestUrl!, cancel);
+            if (manifestBytes == null) return null;
+
+            // 下载签名（可选）
+            byte[]? sigBytes = null;
+            if (!string.IsNullOrEmpty(urls.SigUrl))
+            {
+                sigBytes = await DownloadBytesAsync(urls.SigUrl, cancel);
+            }
+
+            // 签名验证
+            if (sigBytes != null)
+            {
+                if (!ManifestVerifier.Verify(manifestBytes, sigBytes))
+                {
+                    UpdateLogger.Error("verify", UpdateErrorCodes.VerifySignature, new Dictionary<string, object?>
+                    {
+                        ["url"] = urls.ManifestUrl
+                    });
+                    return null;
                 }
+                UpdateLogger.Info("verify", new Dictionary<string, object?> { ["result"] = "signature-ok" });
+            }
+            else
+            {
+                UpdateLogger.Warn("verify", null, new Dictionary<string, object?>
+                {
+                    ["result"] = "no-signature",
+                    ["url"] = urls.ManifestUrl
+                });
+            }
+
+            return JsonSerializer.Deserialize<UpdateManifest>(manifestBytes);
+        }
+
+        private async Task<AssetUrls?> ResolveAssetUrlsAsync(string releaseApiUrl, CancellationToken cancel)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, releaseApiUrl);
+            req.Headers.UserAgent.ParseAdd("SwAiPlugin");
+
+            var resp = await _metaClient.SendAsync(req, cancel);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            string json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("assets", out var assets)) return null;
+
+            var urls = new AssetUrls();
+            foreach (var a in assets.EnumerateArray())
+            {
+                if (!a.TryGetProperty("name", out var n) || !a.TryGetProperty("browser_download_url", out var dl))
+                    continue;
+                string name = n.GetString() ?? "";
+                if (string.Equals(name, ManifestAssetName, StringComparison.OrdinalIgnoreCase))
+                    urls.ManifestUrl = dl.GetString();
+                else if (string.Equals(name, "manifest.sig", StringComparison.OrdinalIgnoreCase))
+                    urls.SigUrl = dl.GetString();
+            }
+            return urls.ManifestUrl != null ? urls : null;
+        }
+
+        private async Task<byte[]?> DownloadBytesAsync(string url, CancellationToken cancel)
+        {
+            try
+            {
+                var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.UserAgent.ParseAdd("SwAiPlugin");
+                var resp = await _metaClient.SendAsync(req, cancel);
+                if (!resp.IsSuccessStatusCode) return null;
+                return await resp.Content.ReadAsByteArrayAsync();
             }
             catch
             {
-                // If parsing fails, assume no update available
+                return null;
+            }
+        }
+
+        // ────────────────────────── Internal: download ──────────────────────────
+
+        public class DownloadProgress
+        {
+            public long BytesReceived { get; set; }
+            public long? TotalBytes { get; set; }
+            public double BytesPerSecond { get; set; }
+            public double Fraction => TotalBytes.HasValue && TotalBytes.Value > 0
+                ? (double)BytesReceived / TotalBytes.Value
+                : 0;
+        }
+
+        private async Task DownloadToFileAsync(string url, string targetPath, IProgress<DownloadProgress>? progress, CancellationToken cancel)
+        {
+            using var client = CreateHttpClient(PackageTimeout);
+            using var resp = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel);
+            resp.EnsureSuccessStatusCode();
+
+            long? total = resp.Content.Headers.ContentLength;
+
+            using var src = await resp.Content.ReadAsStreamAsync();
+            using var dst = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            var buffer = new byte[DownloadBufferBytes];
+            long received = 0;
+            int read;
+            var sw = Stopwatch.StartNew();
+            long lastBytes = 0;
+            DateTime lastReport = DateTime.UtcNow;
+
+            while ((read = await src.ReadAsync(buffer, 0, buffer.Length, cancel)) > 0)
+            {
+                await dst.WriteAsync(buffer, 0, read, cancel);
+                received += read;
+
+                // 节流：~10 次/秒上报
+                var now = DateTime.UtcNow;
+                if ((now - lastReport).TotalMilliseconds >= 100 && progress != null)
+                {
+                    var elapsedSec = (now - lastReport).TotalSeconds;
+                    double bps = elapsedSec > 0 ? (received - lastBytes) / elapsedSec : 0;
+                    progress.Report(new DownloadProgress { BytesReceived = received, TotalBytes = total, BytesPerSecond = bps });
+                    lastReport = now;
+                    lastBytes = received;
+                }
             }
 
+            progress?.Report(new DownloadProgress { BytesReceived = received, TotalBytes = total ?? received, BytesPerSecond = 0 });
+        }
+
+        // ────────────────────────── Internal: helpers ──────────────────────────
+
+        private static HttpClient CreateHttpClient(TimeSpan timeout)
+        {
+            var handler = new HttpClientHandler
+            {
+                UseProxy = false,                           // net48 在 SW 进程内系统代理可能挂起，直连
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
+            try
+            {
+                // 显式启用 TLS1.2，避免 net48 默认协议带来的 GitHub 握手失败
+                ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            }
+            catch { }
+            return new HttpClient(handler) { Timeout = timeout };
+        }
+
+        private static bool TryParseUtc(string? iso, out DateTime utc)
+        {
+            utc = default;
+            if (string.IsNullOrWhiteSpace(iso)) return false;
+            return DateTime.TryParse(iso, null,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out utc);
+        }
+
+        private static bool IsPreRelease(UpdateManifest manifest)
+        {
+            if (!string.IsNullOrEmpty(manifest.Channel) &&
+                !string.Equals(manifest.Channel, "stable", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (SemanticVersion.TryParse(manifest.Version, out var v) && v!.IsPreRelease)
+                return true;
             return false;
         }
 
-        /// <summary>
-        /// Attempts to locate the SolidWorks executable path from running processes
-        /// or common installation directories.
-        /// </summary>
+        public static string ComputeSha256(string filePath)
+        {
+            using var sha = SHA256.Create();
+            using var fs = File.OpenRead(filePath);
+            var hash = sha.ComputeHash(fs);
+            var sb = new StringBuilder(hash.Length * 2);
+            for (int i = 0; i < hash.Length; i++) sb.Append(hash[i].ToString("x2"));
+            return sb.ToString();
+        }
+
         private static string GetSolidWorksPath()
         {
+            // 1. Running process (plugin runs inside SLDWORKS.exe)
             try
             {
-                // Try to find a running SolidWorks process and get its path
                 foreach (var proc in Process.GetProcessesByName("SLDWORKS"))
                 {
-                    try
-                    {
-                        return proc.MainModule.FileName;
-                    }
-                    catch
-                    {
-                        // Access denied or process exited -- continue
-                    }
-                }
-
-                // Try common installation paths
-                string[] programDirs = new[]
-                {
-                    @"D:\Program Files\SOLIDWORKS Corp\SOLIDWORKS",
-                    @"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS",
-                    @"C:\Program Files (x86)\SOLIDWORKS Corp\SOLIDWORKS"
-                };
-
-                foreach (string dir in programDirs)
-                {
-                    string swExe = Path.Combine(dir, "SLDWORKS.exe");
-                    if (File.Exists(swExe))
-                        return swExe;
+                    try { return proc.MainModule.FileName; } catch { }
                 }
             }
-            catch
+            catch { }
+
+            // 2. Registry — find latest installed SolidWorks version
+            try
             {
-                // Fall through to default
+                string latestPath = null;
+                int latestYear = 0;
+
+                foreach (var root in new[]
+                {
+                    Registry.LocalMachine.OpenSubKey(@"SOFTWARE\SolidWorks"),
+                    Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\SolidWorks")
+                })
+                {
+                    if (root == null) continue;
+                    using (root)
+                    {
+                        foreach (var subKeyName in root.GetSubKeyNames())
+                        {
+                            if (!subKeyName.StartsWith("SolidWorks 20")) continue;
+                            var yearStr = subKeyName.Substring("SolidWorks ".Length);
+                            if (!int.TryParse(yearStr, out int year) || year <= latestYear) continue;
+
+                            using var subKey = root.OpenSubKey(subKeyName);
+                            var folder = subKey?.GetValue("SolidWorks Folder") as string;
+                            if (string.IsNullOrEmpty(folder)) continue;
+                            var exe = Path.Combine(folder, "SLDWORKS.exe");
+                            if (File.Exists(exe))
+                            {
+                                latestYear = year;
+                                latestPath = exe;
+                            }
+                        }
+                    }
+                }
+                if (latestPath != null) return latestPath;
+            }
+            catch { }
+
+            // 3. Hardcoded fallback
+            string[] dirs =
+            {
+                @"D:\Program Files\SOLIDWORKS Corp\SOLIDWORKS",
+                @"C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS",
+                @"C:\Program Files (x86)\SOLIDWORKS Corp\SOLIDWORKS"
+            };
+            foreach (var d in dirs)
+            {
+                string exe = Path.Combine(d, "SLDWORKS.exe");
+                if (File.Exists(exe)) return exe;
             }
 
-            // Default fallback -- rely on PATH or file association
             return "SLDWORKS.exe";
+        }
+
+        // 抛出非法路径用的简易异常
+        private class SecurityException : Exception
+        {
+            public SecurityException(string msg) : base(msg) { }
         }
     }
 }

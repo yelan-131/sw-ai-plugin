@@ -117,10 +117,14 @@ namespace SwComAddin
             {
                 try
                 {
-                    var msg = (NATIVE_MSG)Marshal.PtrToStructure(lParam, typeof(NATIVE_MSG));
+                    // Peek message field only (offset 8 on x64, after IntPtr hwnd),
+                    // avoiding full Marshal.PtrToStructure on every SW message.
+                    int msgId = Marshal.ReadInt32(lParam, 8);
 
-                    if (msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST)
+                    if (msgId >= WM_KEYFIRST && msgId <= WM_KEYLAST)
                     {
+                        var msg = (NATIVE_MSG)Marshal.PtrToStructure(lParam, typeof(NATIVE_MSG));
+
                         if (_wpfHwnd == IntPtr.Zero)
                             CaptureWpfHwnd();
 
@@ -134,7 +138,7 @@ namespace SwComAddin
                             Marshal.StructureToPtr(msg, lParam, false);
                         }
 
-                        if (msg.message == WM_CHAR && isInput && msg.hwnd == _wpfHwnd)
+                        if (msgId == WM_CHAR && isInput && msg.hwnd == _wpfHwnd)
                         {
                             int charCode = msg.wParam.ToInt32();
                             if (charCode >= 0x20)

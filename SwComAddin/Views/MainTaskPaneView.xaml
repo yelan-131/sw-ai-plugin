@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:views="clr-namespace:SwComAddin.Views"
              mc:Ignorable="d" FontFamily="Microsoft YaHei, Segoe UI"
+             PreviewKeyDown="UserControl_PreviewKeyDown"
              d:DesignHeight="600" d:DesignWidth="340">
     <UserControl.Resources>
         <!-- Underline Tab Style -->
@@ -108,22 +109,15 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Header -->
         <Border Grid.Row="0" Background="#0078D7" Padding="12,10">
-            <Grid>
-                <StackPanel>
-                    <TextBlock Text="SW AI Plugin" Foreground="White" FontSize="14" FontWeight="Bold"/>
-                    <TextBlock Text="AI 驱动的参数化建模助手" Foreground="#B8D4F0" FontSize="10" Margin="0,2,0,0"/>
-                </StackPanel>
-                <!-- Help button in header -->
-                <Button x:Name="HelpBtn" HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
-                        Click="HelpBtn_Click" ToolTip="帮助手册">
-                    <TextBlock Text="&#xE897;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#B8D4F0"/>
-                </Button>
-            </Grid>
+            <StackPanel>
+                <TextBlock Text="SW AI Plugin" Foreground="White" FontSize="14" FontWeight="Bold"/>
+                <TextBlock Text="AI 驱动的参数化建模助手" Foreground="#B8D4F0" FontSize="10" Margin="0,2,0,0"/>
+            </StackPanel>
         </Border>
 
         <!-- Tab Bar (5 tabs + help, underline style) -->
@@ -577,95 +571,100 @@
             </ScrollViewer>
         </Grid>
 
-        <!-- Footer Status Bar -->
-        <Border Grid.Row="3" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <!-- Row 0: status bar (normal or update) -->
-                <Grid Grid.Row="0">
-                    <!-- Normal status bar -->
-                    <Grid x:Name="StatusBar" Margin="8,4">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock x:Name="FooterVersion" Text="v1.0.0" FontSize="9" Foreground="#AAAAAA"
-                                       VerticalAlignment="Center" Cursor="Hand" MouseDown="FooterVersion_MouseDown"/>
-                            <TextBlock Text="  |  " FontSize="9" Foreground="#DDDDDD" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusAI" Text="AI OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
-                            <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusParts" Text="标准件 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
-                            <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusLib" Text="模型库 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <Button x:Name="FooterSettingsBtn" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
-                                Click="FooterSettingsBtn_Click" ToolTip="系统设置">
-                            <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#888888"/>
-                        </Button>
-                    </Grid>
-                    <!-- Update notification bar (hidden by default) -->
-                    <Grid x:Name="UpdateBar" Margin="8,4" Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock x:Name="UpdateVersionText" Text="" FontSize="9" Foreground="#C62828" FontWeight="Bold" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="UpdateActionLink" Text=" 点击更新" FontSize="9" Foreground="#0078D7" Cursor="Hand"
-                                       TextDecorations="Underline" VerticalAlignment="Center" MouseDown="UpdateActionLink_MouseDown"/>
-                            <TextBlock Text="  |  " FontSize="9" Foreground="#DDDDDD" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusAI2" Text="AI OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
-                            <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusParts2" Text="标准件 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
-                            <TextBlock Text="  " FontSize="9" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="StatusLib2" Text="模型库 OK" FontSize="9" Foreground="#4CAF50" VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <Button x:Name="FooterSettingsBtn2" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
-                                Click="FooterSettingsBtn_Click" ToolTip="系统设置">
-                            <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#888888"/>
-                        </Button>
-                    </Grid>
-                </Grid>
-                <!-- Row 1: update detail panel (hidden by default) -->
-                <StackPanel x:Name="UpdatePanel" Grid.Row="1" Visibility="Collapsed" Background="White" Margin="10,8">
-                    <TextBlock x:Name="UpdateTitle" Text="" FontSize="11" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,4"/>
-                    <ScrollViewer MaxHeight="80" VerticalScrollBarVisibility="Auto">
-                        <TextBlock x:Name="UpdateNotes" Text="" FontSize="10" Foreground="#666666" TextWrapping="Wrap"/>
-                    </ScrollViewer>
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button x:Name="UpdateNowBtn" Content="立即更新" Click="UpdateNowBtn_Click"
-                                Style="{StaticResource PrimaryBtn}" Padding="12,4" Margin="0,0,6,0"/>
-                        <Button x:Name="UpdateLaterBtn" Content="稍后提醒" Click="UpdateLaterBtn_Click"
-                                Style="{StaticResource SecondaryBtn}" Padding="12,4"/>
-                    </StackPanel>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <!-- Update Panel (inline, hidden by default, expands above footer) -->
+        <StackPanel x:Name="UpdatePanel" Grid.Row="3" Visibility="Collapsed" Background="White" Margin="10,4">
+            <!-- 元数据行 -->
+            <TextBlock x:Name="UpdateTitle" FontWeight="Bold" FontSize="11" />
+            <TextBlock x:Name="UpdateMetaText" FontSize="9" Foreground="#999" />
 
-        <!-- Version Info Popup (floating above content) -->
-        <Border x:Name="VersionPopup" Grid.Row="2" Background="White"
-                BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4"
-                Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Visibility="Collapsed" Margin="30,0">
-            <StackPanel Width="240">
-                <TextBlock Text="SW AI Plugin" FontSize="16" FontWeight="Bold" Foreground="#0078D7"
-                           HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                <TextBlock x:Name="VersionPopupVersion" Text="v0.1.0" FontSize="12" Foreground="#666666"
-                           HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                <Separator Margin="0,0,0,8"/>
-                <TextBlock FontSize="11" Foreground="#444444" HorizontalAlignment="Center" Margin="0,0,0,4">
-                    <Run Text="GitHub: "/>
-                    <Hyperlink NavigateUri="https://github.com/yelan-131/sw-ai-plugin"
-                               RequestNavigate="GitHubLink_RequestNavigate">
-                        sw-ai-plugin
-                    </Hyperlink>
-                </TextBlock>
-                <Separator Margin="0,8,0,8"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <Button x:Name="VersionCheckUpdateBtn" Content="检查更新" Click="VersionCheckUpdateBtn_Click"
-                            Style="{StaticResource PrimaryBtn}" Padding="14,4" Margin="0,0,8,0"/>
-                    <Button x:Name="VersionCloseBtn" Content="关闭" Click="VersionCloseBtn_Click"
-                            Style="{StaticResource SecondaryBtn}" Padding="14,4"/>
+            <!-- Release notes（可滚动） -->
+            <ScrollViewer x:Name="UpdateNotesScroller" MaxHeight="120" Margin="0,4">
+                <StackPanel>
+                    <ItemsControl x:Name="UpdateNotesItems" Visibility="Collapsed">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Section}" FontSize="11" FontWeight="Bold" Foreground="#333333" Margin="0,4,0,2"/>
+                                    <ItemsControl ItemsSource="{Binding Items}" Margin="0,0,0,6">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock FontSize="10" Foreground="#666666" TextWrapping="Wrap" Margin="8,0,0,2">
+                                                    <Run Text="{Binding Index}" Foreground="#999999" FontSize="10"/>
+                                                    <Run Text=" "/>
+                                                    <Run Text="{Binding Text}" Foreground="#666666" FontSize="10"/>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="UpdateNotes" Visibility="Collapsed" />
                 </StackPanel>
+            </ScrollViewer>
+
+            <!-- 进度区域 -->
+            <StackPanel x:Name="UpdateProgressArea" Visibility="Collapsed">
+                <ProgressBar x:Name="UpdateProgressBar" Height="12" Minimum="0" Maximum="100" Value="0"/>
+                <TextBlock x:Name="UpdateProgressText" FontSize="10" Foreground="#666" />
             </StackPanel>
+
+            <!-- 错误区域 -->
+            <Border x:Name="UpdateErrorArea" Visibility="Collapsed" Background="#FFF3F3" CornerRadius="3" Padding="6,4" Margin="0,4">
+                <StackPanel>
+                    <TextBlock x:Name="UpdateErrorText" FontSize="10" Foreground="#C62828" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="UpdateErrorCodeText" FontSize="9" Foreground="#999" />
+                </StackPanel>
+            </Border>
+
+            <!-- 手动下载区域（默认隐藏，出错时显示） -->
+            <StackPanel x:Name="ManualDownloadRow" Visibility="Collapsed" Orientation="Horizontal" Margin="0,4">
+                <Button x:Name="GitHubReleaseBtn" Content="GitHub" Click="GitHubReleaseBtn_Click" FontSize="9" Margin="0,0,4,0" />
+                <Button x:Name="GiteeReleaseBtn" Content="Gitee" Click="GiteeReleaseBtn_Click" FontSize="9" Margin="0,0,4,0" />
+                <Button x:Name="LocalZipBtn" Content="本地 ZIP" Click="LocalZipBtn_Click" FontSize="9" />
+            </StackPanel>
+
+            <!-- 操作按钮行 -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
+                <!-- 稍后提醒：点击弹出选项 -->
+                <Button x:Name="UpdateLaterBtn" Content="稍后提醒 ▾" Click="UpdateLaterBtn_Click" FontSize="10" Margin="0,0,4,0" />
+                <!-- 稍后提醒下拉弹出菜单 -->
+                <Popup x:Name="DeferPopup" PlacementTarget="{Binding ElementName=UpdateLaterBtn}" StaysOpen="False" IsOpen="False">
+                    <Border Background="White" BorderBrush="#DDD" BorderThickness="1" CornerRadius="3">
+                        <StackPanel>
+                            <Button Content="1 小时后" Tag="1" Click="DeferOption_Click" Width="100" HorizontalContentAlignment="Left" Padding="8,4" />
+                            <Button Content="4 小时后" Tag="4" Click="DeferOption_Click" Width="100" HorizontalContentAlignment="Left" Padding="8,4" />
+                            <Button Content="明天" Tag="24" Click="DeferOption_Click" Width="100" HorizontalContentAlignment="Left" Padding="8,4" />
+                            <Button Content="7 天后" Tag="168" Click="DeferOption_Click" Width="100" HorizontalContentAlignment="Left" Padding="8,4" />
+                        </StackPanel>
+                    </Border>
+                </Popup>
+                <!-- 更新/安装按钮 -->
+                <Button x:Name="UpdateNowBtn" Content="立即更新" Click="UpdateNowBtn_Click" FontSize="10" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Footer Status Bar (3-zone: version | status dots | settings) -->
+        <Border Grid.Row="4" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="8,4">
+            <Grid>
+                <!-- Left: version -->
+                <TextBlock x:Name="FooterVersion" Text="v0.1.3" FontSize="9" Foreground="#AAAAAA"
+                           VerticalAlignment="Center" Cursor="Hand" MouseDown="FooterVersion_MouseDown"
+                           HorizontalAlignment="Left"/>
+                <!-- Center: status dots -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse x:Name="StatusAIDot" Width="6" Height="6" Fill="#C62828" Margin="0,0,4,0" ToolTip="AI 服务"/>
+                    <Ellipse x:Name="StatusPartsDot" Width="6" Height="6" Fill="#C62828" Margin="0,0,4,0" ToolTip="标准件库"/>
+                    <Ellipse x:Name="StatusLibDot" Width="6" Height="6" Fill="#C62828" ToolTip="模型库"/>
+                </StackPanel>
+                <!-- Right: settings button -->
+                <Button x:Name="FooterSettingsBtn" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="4,2"
+                        Click="FooterSettingsBtn_Click" ToolTip="系统设置">
+                    <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="#888888"/>
+                </Button>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>
