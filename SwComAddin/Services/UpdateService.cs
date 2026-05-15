@@ -667,9 +667,9 @@ namespace SwComAddin.Services
                     list.Add(new SourceSpec("mirror", ct => FetchMirrorManifestAsync(_userCfg.MirrorUrl!, ct)));
                     break;
                 default:
-                    // auto：Gitee 主、GitHub 备（按用户选择的策略；并发请求 + 取最高版本）
-                    list.Add(new SourceSpec("gitee", ct => FetchGiteeManifestAsync(ct)));
+                    // auto：GitHub 主、Gitee 备（取最高版本号）
                     list.Add(new SourceSpec("github", ct => FetchGitHubManifestAsync(ct)));
+                    list.Add(new SourceSpec("gitee", ct => FetchGiteeManifestAsync(ct)));
                     if (!string.IsNullOrEmpty(_userCfg.MirrorUrl))
                         list.Add(new SourceSpec("mirror", ct => FetchMirrorManifestAsync(_userCfg.MirrorUrl!, ct)));
                     break;

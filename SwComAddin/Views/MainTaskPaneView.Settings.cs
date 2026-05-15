@@ -298,12 +298,6 @@ namespace SwComAddin.Views
             {
                 ShowUpdatePanel(true);
             }
-            else
-            {
-                // 无待更新 → 跳转到 Tab5 系统设置
-                TabSettings.IsChecked = true;
-                ShowPage(PageSettings);
-            }
         }
 
         // === Update UI State Machine ===
