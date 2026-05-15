@@ -290,9 +290,19 @@ namespace SwComAddin.Views
 
         private void FooterVersion_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (_pendingManifest != null || _updatePanelOpen)
+            if (_updatePanelOpen)
             {
-                ShowUpdatePanel(!_updatePanelOpen);
+                ShowUpdatePanel(false);
+            }
+            else if (_pendingManifest != null)
+            {
+                ShowUpdatePanel(true);
+            }
+            else
+            {
+                // 无待更新 → 跳转到 Tab5 系统设置
+                TabSettings.IsChecked = true;
+                ShowPage(PageSettings);
             }
         }
 
@@ -356,9 +366,11 @@ namespace SwComAddin.Views
             {
                 if (isManual)
                 {
-                    ShowUpdatePanel(true);
-                    UpdateProgressText.Text = "已有检查任务在进行中，请稍候...";
-                    UpdateProgressArea.Visibility = Visibility.Visible;
+                    CheckUpdateBtn.IsEnabled = true;
+                    CheckUpdateBtn.Content = "检查更新";
+                    UpdateCheckResultText.Text = "已有检查任务在进行中，请稍候...";
+                    UpdateCheckResultText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF8F00"));
+                    UpdateCheckResult.Visibility = Visibility.Visible;
                 }
                 return;
             }
@@ -368,12 +380,13 @@ namespace SwComAddin.Views
             {
                 if (isManual)
                 {
+                    // 手动检查：只在 Tab5 内显示状态，不操作底部 UpdatePanel
                     _downloadedZipPath = null;
-                    ShowUpdateError(null, null);
-                    UpdateProgressArea.Visibility = Visibility.Visible;
-                    UpdateProgressBar.Value = 0;
-                    UpdateProgressText.Text = "正在检查更新...";
-                    ShowUpdatePanel(true);
+                    CheckUpdateBtn.IsEnabled = false;
+                    CheckUpdateBtn.Content = "检查中...";
+                    UpdateCheckResult.Visibility = Visibility.Visible;
+                    UpdateCheckResultText.Text = "正在检查更新...";
+                    UpdateCheckResultText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#FF8F00"));
                 }
 
                 Log("Update: starting check...");
@@ -385,8 +398,7 @@ namespace SwComAddin.Views
                     Log("Update: deferred, skipping");
                     if (isManual)
                     {
-                        UpdateProgressArea.Visibility = Visibility.Collapsed;
-                        UpdateProgressText.Text = "已稍后提醒，窗口期内不再检查";
+                        ShowManualCheckResult(false, "已稍后提醒，窗口期内不再检查");
                     }
                     return;
                 }
@@ -396,9 +408,10 @@ namespace SwComAddin.Views
                     Log($"Update: fail - {result.ErrorCode}: {result.ErrorMessage}");
                     if (isManual)
                     {
-                        UpdateProgressArea.Visibility = Visibility.Collapsed;
-                        ShowUpdateError($"无法连接更新服务器：{result.ErrorMessage ?? "网络错误"}", result.ErrorCode);
-                        SetUpdateUIState(UpdateUIState.Error);
+                        ShowManualCheckResult(false, $"✗ 检查失败：{result.ErrorMessage ?? "网络错误"}");
+                    }
+                    else
+                    {
                         SetVersionDisplay(VersionDisplayState.Error);
                     }
                     return;
@@ -411,34 +424,31 @@ namespace SwComAddin.Views
                     _pendingUpdateUrl = result.Manifest.Package?.PrimaryUrl;
                     _pendingUpdateVersion = result.Manifest.Version;
 
-                    UpdateTitle.Text = $"v{_version} → {result.Manifest.Version}";
-                    UpdateMetaText.Text = BuildMetaLine(result.Manifest, result.Source);
-                    RenderReleaseNotes(result.Manifest);
-
-                    SetUpdateUIState(UpdateUIState.Idle);
-                    UpdateProgressArea.Visibility = Visibility.Collapsed;
-
-                    // 仅改变版本号颜色，不自动展开面板（自动检查时）
                     SetVersionDisplay(VersionDisplayState.HasUpdate);
 
-                    if (result.Manifest.ForceUpdate)
+                    if (isManual)
                     {
-                        UpdateLaterBtn.Visibility = Visibility.Collapsed;
-                        ShowUpdatePanel(true);
+                        // Tab5 内显示结果
+                        ShowManualCheckResult(true, $"发现新版本 v{result.Manifest.Version}");
+
+                        // 准备底部 UpdatePanel 数据（但不展开，等用户点击版本号或选择版本后再展开）
+                        UpdateTitle.Text = $"v{_version} → {result.Manifest.Version}";
+                        UpdateMetaText.Text = BuildMetaLine(result.Manifest, result.Source);
+                        RenderReleaseNotes(result.Manifest);
+                        SetUpdateUIState(UpdateUIState.Idle);
                     }
                     else
                     {
-                        UpdateLaterBtn.Visibility = Visibility.Visible;
-                        if (isManual) ShowUpdatePanel(true);
+                        // 自动检查：准备底部面板数据，等用户点击版本号展开
+                        UpdateTitle.Text = $"v{_version} → {result.Manifest.Version}";
+                        UpdateMetaText.Text = BuildMetaLine(result.Manifest, result.Source);
+                        RenderReleaseNotes(result.Manifest);
+                        SetUpdateUIState(UpdateUIState.Idle);
                     }
                 }
                 else if (isManual)
                 {
-                    // 已是最新版本
-                    UpdateProgressArea.Visibility = Visibility.Collapsed;
-                    UpdateProgressText.Text = $"✓ 已是最新版本 v{_version}";
-                    UpdateProgressArea.Visibility = Visibility.Visible;
-                    UpdateProgressBar.Value = 100;
+                    ShowManualCheckResult(false, $"✓ 已是最新版本 v{_version}");
                 }
             }
             catch (Exception ex)
@@ -446,15 +456,21 @@ namespace SwComAddin.Views
                 Log($"Update: exception - {ex.Message}");
                 if (isManual)
                 {
-                    UpdateProgressArea.Visibility = Visibility.Collapsed;
-                    ShowUpdateError($"检查失败：{ex.Message}", null);
-                    SetUpdateUIState(UpdateUIState.Error);
+                    ShowManualCheckResult(false, $"✗ 检查失败：{ex.Message}");
+                }
+                else
+                {
                     SetVersionDisplay(VersionDisplayState.Error);
                 }
             }
             finally
             {
                 _isChecking = false;
+                if (isManual)
+                {
+                    CheckUpdateBtn.IsEnabled = true;
+                    CheckUpdateBtn.Content = "检查更新";
+                }
             }
         }
 
@@ -871,6 +887,58 @@ namespace SwComAddin.Views
             }
             return parameters;
         }
+        // === Tab5: Update Settings ===
+
+        private void CheckUpdateBtn_Click(object sender, RoutedEventArgs e)
+        {
+            CheckUpdateBtn.IsEnabled = false;
+            CheckUpdateBtn.Content = "检查中...";
+            UpdateCheckResult.Visibility = Visibility.Visible;
+            UpdateCheckResultText.Text = "正在检查更新...";
+
+            CheckForUpdateAsync(isManual: true);
+        }
+
+        private void ShowManualCheckResult(bool hasUpdate, string message)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                CheckUpdateBtn.IsEnabled = true;
+                CheckUpdateBtn.Content = "检查更新";
+
+                UpdateCheckResult.Visibility = Visibility.Visible;
+                if (hasUpdate)
+                {
+                    UpdateCheckResultText.Text = message;
+                    UpdateCheckResultText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0078D7"));
+                }
+                else
+                {
+                    UpdateCheckResultText.Text = message;
+                    UpdateCheckResultText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#2E7D32"));
+                }
+            }));
+        }
+
+        private async void OfflineUpdateBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = "ZIP 文件|*.zip",
+                Title = "选择更新包"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            var zipPath = dlg.FileName;
+            OfflineFileInfo.Text = $"已选择：{Path.GetFileName(zipPath)} ({new FileInfo(zipPath).Length / 1024.0 / 1024.0:F1}MB)";
+            OfflineFileInfo.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#888888"));
+            OfflineFileInfo.Visibility = Visibility.Visible;
+
+            // 将 ZIP 路径设为已下载状态，走现有安装流程
+            _downloadedZipPath = zipPath;
+            OfflineFileInfo.Text += "\n✓ 已就绪，点击下方「保存并安装」完成更新";
+        }
+
         private static void Log(string message)
         {
             try

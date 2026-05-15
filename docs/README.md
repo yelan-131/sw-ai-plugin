@@ -1,6 +1,6 @@
 # SW AI Plugin 文档中心
 
-AI 驱动的 SolidWorks 参数化建模助手插件，v0.1.2。
+AI 驱动的 SolidWorks 参数化建模助手插件，v0.1.4。
 
 ---
 
@@ -98,7 +98,7 @@ SolidWorks
 
 ## 版本信息
 
-- 插件版本：v0.1.2
+- 插件版本：v0.1.4
 - AI 模型：Claude Sonnet 4.6
 - 支持 SolidWorks：2020+
 - 运行平台：Windows (x64)

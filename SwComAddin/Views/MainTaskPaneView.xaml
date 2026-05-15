@@ -496,11 +496,57 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- 更新 -->
+                    <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="&#xE946; 更新" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,8"/>
+                            <Grid Margin="0,0,0,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="当前版本" Foreground="#888888" FontSize="11"/>
+                                <TextBlock x:Name="SettingsVersion" Text="v0.1.3" Foreground="#333333" FontSize="11" FontWeight="Bold" Grid.Column="1"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="70"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="检查周期" Foreground="#888888" FontSize="11" VerticalAlignment="Center"/>
+                                <ComboBox x:Name="CheckIntervalCombo" FontSize="11" Padding="4,3" BorderBrush="#CCCCCC" Grid.Column="1" SelectedIndex="1">
+                                    <ComboBoxItem Content="1 小时"/>
+                                    <ComboBoxItem Content="4 小时"/>
+                                    <ComboBoxItem Content="8 小时"/>
+                                    <ComboBoxItem Content="24 小时"/>
+                                    <ComboBoxItem Content="禁用自动检查"/>
+                                </ComboBox>
+                            </Grid>
+                            <Button x:Name="CheckUpdateBtn" Content="检查更新" Click="CheckUpdateBtn_Click" Style="{StaticResource PrimaryBtn}" Padding="16,5" HorizontalAlignment="Left"/>
+                            <!-- 检查结果区域 -->
+                            <StackPanel x:Name="UpdateCheckResult" Visibility="Collapsed" Margin="0,8,0,0">
+                                <TextBlock x:Name="UpdateCheckResultText" Text="" FontSize="11" Foreground="#666666" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 离线更新 -->
+                    <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="&#xE8E5; 离线更新" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,6"/>
+                            <TextBlock Text="从本地 ZIP 文件安装更新（适用于无网络环境）" FontSize="10" Foreground="#999999" Margin="0,0,0,6"/>
+                            <StackPanel x:Name="OfflineUpdatePanel">
+                                <Button x:Name="OfflineUpdateBtn" Content="选择本地 ZIP 文件" Click="OfflineUpdateBtn_Click" Style="{StaticResource SecondaryBtn}" Padding="12,4" HorizontalAlignment="Left"/>
+                                <TextBlock x:Name="OfflineFileInfo" Text="" FontSize="10" Foreground="#888888" Margin="0,4,0,0" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
                     <!-- 关于 -->
                     <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="2" Padding="10">
                         <StackPanel>
                             <TextBlock Text="&#xE946; 关于" FontSize="12" FontWeight="Bold" Foreground="#333333" Margin="0,0,0,4"/>
-                            <TextBlock Text="SW AI Plugin v1.0" FontSize="11" Foreground="#888888" Margin="0,0,0,2"/>
+                            <TextBlock x:Name="AboutVersion" Text="SW AI Plugin v0.1.3" FontSize="11" Foreground="#888888" Margin="0,0,0,2"/>
                             <TextBlock Text="AI 驱动的 SolidWorks 参数化建模助手" FontSize="10" Foreground="#AAAAAA" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>

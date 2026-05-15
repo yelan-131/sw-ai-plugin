@@ -192,7 +192,7 @@ namespace SwComAddin.Services
         public string Schema { get; set; } = "1.0";
 
         [JsonPropertyName("version")]
-        public string Version { get; set; } = "0.1.3";
+        public string Version { get; set; } = "0.1.4";
 
         [JsonPropertyName("channel")]
         public string Channel { get; set; } = "stable";

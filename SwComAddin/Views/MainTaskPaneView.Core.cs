@@ -41,7 +41,7 @@ namespace SwComAddin.Views
         private string? _selectedTemplate;
         private string _backendUrl = DefaultBackendUrl;
         private string _modelLibPath = "";
-        private string _version = "0.1.3";
+        private string _version = "0.1.4";
         private readonly PluginConfigService _configService;
         private UserConfig _userConfig = new UserConfig();
         private PluginMeta _pluginMeta = new PluginMeta();
@@ -175,6 +175,8 @@ namespace SwComAddin.Views
             BackendUrlInput.Text = _backendUrl;
             ModelLibPathInput.Text = _modelLibPath;
             FooterVersion.Text = $"v{_version}";
+            SettingsVersion.Text = $"v{_version}";
+            AboutVersion.Text = $"SW AI Plugin v{_version}";
             SetupTreeViewTemplates();
             LoadPartsLibrary();
             LoadCustomLibrary();
@@ -202,7 +204,7 @@ namespace SwComAddin.Views
 
                 _backendUrl = string.IsNullOrEmpty(_userConfig.BackendUrl) ? DefaultBackendUrl : _userConfig.BackendUrl;
                 _modelLibPath = _userConfig.ModelLibraryPath ?? "";
-                _version = string.IsNullOrEmpty(_pluginMeta.Version) ? "0.1.3" : _pluginMeta.Version;
+                _version = string.IsNullOrEmpty(_pluginMeta.Version) ? "0.1.4" : _pluginMeta.Version;
             }
             catch { }
         }

@@ -6,7 +6,7 @@ echo   SW AI Plugin - Release Package
 echo ========================================
 echo.
 
-set VERSION=0.1.3
+set VERSION=0.1.4
 set CHANNEL=stable
 set UPDATE_REPO=yelan-131/sw-ai-plugin
 set GITEE_REPO=yelan1387/sw-ai-plugin
